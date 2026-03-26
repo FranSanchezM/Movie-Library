@@ -1,3 +1,4 @@
+import type { EnrichedMovie } from "@/lib/tmdb";
 import {
 	Body,
 	Button,
@@ -11,7 +12,6 @@ import {
 	Section,
 	Text,
 } from "@react-email/components";
-import type { EnrichedMovie } from "@/lib/tmdb";
 
 interface MovieRecommendationEmailProps {
 	libraryName: string;
@@ -33,234 +33,178 @@ export function MovieRecommendationEmail({
 			<Preview>{subject}</Preview>
 			<Body
 				style={{
-					backgroundColor: "#080808",
-					fontFamily: "'DM Sans', Helvetica, Arial, sans-serif",
+					backgroundColor: "#f5f5f5",
+					fontFamily:
+						"-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 					margin: 0,
 					padding: 0,
 				}}
 			>
 				<Container
 					style={{
-						maxWidth: "560px",
+						maxWidth: "600px",
 						margin: "0 auto",
-						padding: "40px 20px",
+						padding: "20px 0 40px",
 					}}
 				>
-					{/* Header */}
+					{/* Dark Header Block */}
 					<Section
 						style={{
-							textAlign: "center" as const,
-							marginBottom: "32px",
+							backgroundColor: "#080808",
+							padding: "40px 20px",
+							textAlign: "center",
+							borderRadius: "8px 8px 0 0",
 						}}
 					>
+						<Heading
+							style={{
+								margin: "0 0 10px",
+								fontSize: "26px",
+								lineHeight: "1.2",
+								color: "#ffffff",
+								fontWeight: "600",
+							}}
+						>
+							🎬 Bienvenido a CineRandom
+						</Heading>
 						<Text
 							style={{
-								fontFamily: "'Bebas Neue', Impact, sans-serif",
-								fontSize: "28px",
-								letterSpacing: "4px",
-								color: "#D4A853",
 								margin: 0,
+								fontSize: "15px",
+								color: "#D4A853",
+								lineHeight: "1.4",
 							}}
 						>
-							🎬 CINERANDOM
-						</Text>
-						<Text
-							style={{
-								fontSize: "13px",
-								color: "#666",
-								margin: "4px 0 0",
-								letterSpacing: "1px",
-							}}
-						>
-							Recomendación {freqLabel} · {libraryName}
+							Tu viaje cinematográfico empieza ahora
 						</Text>
 					</Section>
 
-					{/* Movie Card */}
+					{/* Content Block */}
 					<Section
 						style={{
-							backgroundColor: "#111",
-							border: "1px solid #1e1e1e",
-							borderRadius: "16px",
-							overflow: "hidden",
-							marginBottom: "24px",
+							backgroundColor: "#ffffff",
+							padding: "40px 30px",
+							textAlign: "center",
+							borderRadius: "0 0 8px 8px",
+							border: "1px solid #eaeaec",
+							borderTop: "none",
 						}}
 					>
-						{/* Poster */}
+						<Text
+							style={{
+								fontSize: "11px",
+								fontWeight: "600",
+								letterSpacing: "0.1em",
+								color: "#888888",
+								textTransform: "uppercase",
+								margin: "0 0 20px",
+							}}
+						>
+							TU PELÍCULA {frequency === "daily" ? "DE HOY" : "DE ESTA SEMANA"}
+						</Text>
+
 						{movie.posterUrl && (
 							<Img
 								src={movie.posterUrl}
-								alt={movie.title}
-								width="560"
+								alt={`Póster de ${movie.title}`}
+								width="240"
 								style={{
-									width: "100%",
-									maxHeight: "320px",
-									objectFit: "cover",
+									width: "240px",
+									maxWidth: "100%",
+									margin: "0 auto 24px",
+									borderRadius: "8px",
+									boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
 									display: "block",
 								}}
 							/>
 						)}
 
-						{/* Content */}
-						<Section style={{ padding: "24px" }}>
-							<Heading
-								style={{
-									fontFamily: "'Bebas Neue', Impact, sans-serif",
-									fontSize: "32px",
-									letterSpacing: "2px",
-									color: "#F5F0E8",
-									margin: "0 0 4px",
-									lineHeight: "1.1",
-								}}
-							>
-								{movie.title}
-							</Heading>
+						<Heading
+							style={{
+								fontSize: "24px",
+								fontWeight: "700",
+								color: "#1a1a1a",
+								margin: "0 0 8px",
+								lineHeight: "1.2",
+							}}
+						>
+							{movie.title}
+						</Heading>
+						<Text
+							style={{
+								fontSize: "14px",
+								color: "#666666",
+								margin: "0 0 20px",
+							}}
+						>
+							{movie.releaseYear}
+							{movie.tmdbRating ? ` • ⭐ ${movie.tmdbRating}` : ""}
+						</Text>
+
+						{movie.description && (
 							<Text
 								style={{
-									fontSize: "13px",
-									color: "#888",
-									margin: "0 0 16px",
+									fontSize: "15px",
+									lineHeight: "1.6",
+									color: "#444444",
+									margin: "0 auto 30px",
+									maxWidth: "460px",
 								}}
 							>
-								{movie.releaseYear}
+								{movie.description}
 							</Text>
+						)}
 
-							{/* Ratings */}
-							{(movie.tmdbRating || movie.imdbRating || movie.rtRating) && (
-								<Section
-									style={{
-										display: "flex",
-										gap: "8px",
-										marginBottom: "16px",
-										flexWrap: "wrap",
-									}}
-								>
-									{movie.tmdbRating && (
-										<Text
-											style={{
-												display: "inline-block",
-												fontSize: "11px",
-												fontWeight: "700",
-												color: "#D4A853",
-												backgroundColor: "rgba(212,168,83,0.1)",
-												border: "1px solid rgba(212,168,83,0.3)",
-												borderRadius: "4px",
-												padding: "3px 8px",
-												margin: "0 6px 0 0",
-											}}
-										>
-											⭐ TMDB {movie.tmdbRating}
-										</Text>
-									)}
-									{movie.imdbRating && (
-										<Text
-											style={{
-												display: "inline-block",
-												fontSize: "11px",
-												fontWeight: "700",
-												color: "#D4A853",
-												backgroundColor: "rgba(212,168,83,0.1)",
-												border: "1px solid rgba(212,168,83,0.3)",
-												borderRadius: "4px",
-												padding: "3px 8px",
-												margin: "0 6px 0 0",
-											}}
-										>
-											🎞 IMDb {movie.imdbRating}
-										</Text>
-									)}
-									{movie.rtRating && (
-										<Text
-											style={{
-												display: "inline-block",
-												fontSize: "11px",
-												fontWeight: "700",
-												color: "#D4A853",
-												backgroundColor: "rgba(212,168,83,0.1)",
-												border: "1px solid rgba(212,168,83,0.3)",
-												borderRadius: "4px",
-												padding: "3px 8px",
-												margin: "0",
-											}}
-										>
-											🍅 RT {movie.rtRating}
-										</Text>
-									)}
-								</Section>
-							)}
+						<Button
+							href={movie.letterboxdUrl}
+							style={{
+								backgroundColor: "#0077b6", // Un tono azul similar al del ejemplo
+								color: "#ffffff",
+								fontSize: "15px",
+								fontWeight: "600",
+								textDecoration: "none",
+								textAlign: "center",
+								padding: "14px 28px",
+								borderRadius: "6px",
+								display: "inline-block",
+							}}
+						>
+							Ver en Letterboxd
+						</Button>
 
-							{/* Description */}
-							{movie.description && (
-								<Text
+						{movie.imdbUrl && (
+							<div style={{ marginTop: "16px" }}>
+								<a
+									href={movie.imdbUrl}
 									style={{
-										fontSize: "14px",
-										lineHeight: "1.65",
-										color: "#aaa",
-										margin: "0 0 24px",
-									}}
-								>
-									{movie.description}
-								</Text>
-							)}
-
-							{/* CTAs */}
-							<Section style={{ display: "flex", gap: "12px" }}>
-								<Button
-									href={movie.letterboxdUrl}
-									style={{
-										display: "inline-block",
-										backgroundColor: "#D4A853",
-										color: "#080808",
-										fontWeight: "700",
 										fontSize: "13px",
-										letterSpacing: "1px",
-										textDecoration: "none",
-										borderRadius: "8px",
-										padding: "12px 24px",
-										marginRight: "12px",
+										color: "#666666",
+										textDecoration: "underline",
 									}}
 								>
-									VER EN LETTERBOXD
-								</Button>
-								{movie.imdbUrl && (
-									<Button
-										href={movie.imdbUrl}
-										style={{
-											display: "inline-block",
-											backgroundColor: "transparent",
-											color: "#D4A853",
-											fontWeight: "600",
-											fontSize: "13px",
-											letterSpacing: "1px",
-											textDecoration: "none",
-											borderRadius: "8px",
-											border: "1px solid rgba(212,168,83,0.4)",
-											padding: "12px 20px",
-										}}
-									>
-										IMDb
-									</Button>
-								)}
-							</Section>
-						</Section>
+									Ver en IMDb
+								</a>
+							</div>
+						)}
 					</Section>
 
-					<Hr style={{ borderColor: "#1e1e1e", margin: "0 0 24px" }} />
-
 					{/* Footer */}
-					<Text
-						style={{
-							fontSize: "11px",
-							color: "#444",
-							textAlign: "center",
-							margin: 0,
-							lineHeight: "1.6",
-						}}
-					>
-						Estás recibiendo este email porque creaste una biblioteca en CineRandom.
-						<br />
-						Biblioteca: {libraryName}
-					</Text>
+					<Section style={{ padding: "30px 20px", textAlign: "center" }}>
+						<Text
+							style={{
+								margin: 0,
+								fontSize: "12px",
+								color: "#999999",
+								lineHeight: "1.5",
+							}}
+						>
+							Cada {frequency === "daily" ? "día" : "semana"}, descubrirás una
+							nueva película recomendada según tus gustos.
+							<br />
+							Estás recibiendo este correo por tu biblioteca:{" "}
+							<strong>{libraryName}</strong>.
+						</Text>
+					</Section>
 				</Container>
 			</Body>
 		</Html>
