@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase";
+import { setLibraryCookie } from "../auth-actions";
+
 
 export async function createLibraryAction(data: {
 	name: string;
@@ -23,6 +25,8 @@ export async function createLibraryAction(data: {
 		console.error("Error creating library:", error);
 		throw new Error("No se pudo crear la biblioteca");
 	}
+
+	await setLibraryCookie(library.id);
 
 	return library;
 }

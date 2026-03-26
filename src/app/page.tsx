@@ -1,17 +1,25 @@
 import { MovieCard } from "@/components/movies/movies-card";
 import { createClient } from "@/lib/supabase";
 import type { Library, Recommendation } from "@/types";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import HomeActions from "./home-actions";
 
 async function getLibrary(): Promise<Library | null> {
+	const cookieStore = await cookies();
+	const libraryId = cookieStore.get("cinerandom_library_id")?.value;
+
+	if (!libraryId) {
+		return null;
+	}
+
 	const supabase = createClient();
 	const { data } = await supabase
 		.from("libraries")
 		.select("*")
-		.order("created_at", { ascending: true })
-		.limit(1)
+		.eq("id", libraryId)
 		.maybeSingle();
+
 	return data ?? null;
 }
 

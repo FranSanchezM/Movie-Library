@@ -20,7 +20,7 @@ export async function sendMovieEmail(
 	);
 
 	const { error } = await resend.emails.send({
-		from: "CineRandom <noreply@cinerandom.app>",
+		from: "CineRandom <onboarding@resend.dev>",
 		to: email,
 		subject: `🎬 Tu recomendación ${frequency === "daily" ? "de hoy" : "de la semana"}: ${movie.title}`,
 		html,
