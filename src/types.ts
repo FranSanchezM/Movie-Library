@@ -34,6 +34,8 @@ export interface Recommendation {
 	tmdb_rating: number | null;
 	imdb_rating: string | null;
 	rt_rating: string | null;
+	is_seen: boolean | null;
+	feedback: "liked" | "disliked" | null;
 	recommended_at: string;
 }
 

@@ -3,6 +3,7 @@
 import type { Recommendation } from "@/types";
 import Image from "next/image";
 import { useState } from "react";
+import { updateRecommendationFeedback, deleteRecommendationAction } from "@/app/recommendation-actions";
 
 interface Props {
 	recommendation: Recommendation;
@@ -10,7 +11,12 @@ interface Props {
 
 export function MovieCard({ recommendation }: Props) {
 	const [imgError, setImgError] = useState(false);
+	const [isSeen, setIsSeen] = useState(recommendation.is_seen ?? false);
+	const [feedback, setFeedback] = useState<"liked" | "disliked" | null>(recommendation.feedback ?? null);
+	const [isDeleted, setIsDeleted] = useState(false);
+
 	const {
+		id,
 		title,
 		poster_path,
 		release_year,
@@ -23,6 +29,31 @@ export function MovieCard({ recommendation }: Props) {
 	} = recommendation;
 
 	const imdbUrl = imdb_id ? `https://www.imdb.com/title/${imdb_id}/` : null;
+
+	function handleSeen(e: React.MouseEvent) {
+		e.stopPropagation();
+		e.preventDefault();
+		const newVal = !isSeen;
+		setIsSeen(newVal);
+		updateRecommendationFeedback(id, { is_seen: newVal }).catch(() => setIsSeen(isSeen));
+	}
+
+	function handleFeedback(e: React.MouseEvent, val: "liked" | "disliked") {
+		e.stopPropagation();
+		e.preventDefault();
+		const newVal = feedback === val ? null : val;
+		setFeedback(newVal);
+		updateRecommendationFeedback(id, { feedback: newVal }).catch(() => setFeedback(feedback));
+	}
+
+	function handleDelete(e: React.MouseEvent) {
+		e.stopPropagation();
+		e.preventDefault();
+		setIsDeleted(true);
+		deleteRecommendationAction(id).catch(() => setIsDeleted(false));
+	}
+
+	if (isDeleted) return null;
 
 	return (
 		<>
@@ -156,8 +187,69 @@ export function MovieCard({ recommendation }: Props) {
 					background: rgba(212, 168, 83, 0.15);
 					border-color: #D4A853;
 				}
+				.mc-action-btns {
+					display: flex;
+					gap: 0.5rem;
+					margin-top: 0.25rem;
+					margin-bottom: 0.25rem;
+				}
+				.mc-action-btn {
+					background: rgba(255,255,255,0.05);
+					border: 1px solid rgba(255,255,255,0.1);
+					border-radius: 50%;
+					width: 30px;
+					height: 30px;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					cursor: pointer;
+					color: #fff;
+					transition: all 0.2s;
+					font-size: 0.85rem;
+					padding: 0;
+				}
+				.mc-action-btn:hover {
+					background: rgba(255,255,255,0.15);
+				}
+				.mc-action-btn.active-seen { background: #0077b6; border-color: #0096c7; }
+				.mc-action-btn.active-like { background: #2d6a4f; border-color: #40916c; }
+				.mc-action-btn.active-dislike { background: #9d0208; border-color: #d00000; }
+				
+				.mc-delete-btn {
+					position: absolute;
+					top: 8px;
+					right: 8px;
+					z-index: 10;
+					background: rgba(0,0,0,0.6);
+					backdrop-filter: blur(4px);
+					border: 1px solid rgba(255,255,255,0.1);
+					border-radius: 50%;
+					width: 26px;
+					height: 26px;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					color: #fff;
+					cursor: pointer;
+					transition: background 0.2s, opacity 0.2s;
+					font-size: 0.7rem;
+					opacity: 0;
+					padding: 0;
+				}
+				.movie-card:hover .mc-delete-btn {
+					opacity: 1;
+				}
+				.mc-delete-btn:hover { background: #d00000; border-color: #ff4d4d; }
 			`}</style>
 			<div className="movie-card">
+				<button 
+					className="mc-delete-btn" 
+					onClick={handleDelete}
+					title="Borrar recomendación"
+				>
+					❌
+				</button>
+
 				{poster_path && !imgError ? (
 					<Image
 						src={poster_path}
@@ -196,6 +288,33 @@ export function MovieCard({ recommendation }: Props) {
 						{rt_rating && (
 							<span className="movie-card-rating-badge">🍅 RT {rt_rating}</span>
 						)}
+					</div>
+
+					<div className="mc-action-btns">
+						<button 
+							type="button"
+							className={`mc-action-btn ${isSeen ? 'active-seen' : ''}`}
+							onClick={handleSeen}
+							title={isSeen ? "Marcada como vista" : "Marcar como vista"}
+						>
+							👁️
+						</button>
+						<button 
+							type="button"
+							className={`mc-action-btn ${feedback === 'liked' ? 'active-like' : ''}`}
+							onClick={(e) => handleFeedback(e, 'liked')}
+							title="Me gustó"
+						>
+							👍
+						</button>
+						<button 
+							type="button"
+							className={`mc-action-btn ${feedback === 'disliked' ? 'active-dislike' : ''}`}
+							onClick={(e) => handleFeedback(e, 'disliked')}
+							title="No me gustó"
+						>
+							👎
+						</button>
 					</div>
 
 					{description && (

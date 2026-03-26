@@ -401,6 +401,18 @@ export default function OnboardingPage() {
 									Siguiente →
 								</button>
 							</div>
+
+							<div style={{ textAlign: "center", marginTop: "1.5rem", fontSize: "0.85rem", color: "#888" }}>
+								¿Ya tenés una biblioteca?{" "}
+								<button 
+									type="button"
+									onClick={() => router.push("/login")} 
+									className="login-link"
+									style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: '#D4A853', fontWeight: 600, cursor: 'pointer' }}
+								>
+									Iniciá sesión
+								</button>
+							</div>
 						</>
 					)}
 
