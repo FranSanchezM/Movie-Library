@@ -53,6 +53,13 @@ export function MovieCard({ recommendation }: Props) {
 		deleteRecommendationAction(id).catch(() => setIsDeleted(false));
 	}
 
+	const cardClass = [
+		"movie-card",
+		feedback === "liked" ? "state-liked" : "",
+		feedback === "disliked" ? "state-disliked" : "",
+		isSeen ? "state-seen" : ""
+	].filter(Boolean).join(" ");
+
 	if (isDeleted) return null;
 
 	return (
@@ -93,6 +100,10 @@ export function MovieCard({ recommendation }: Props) {
 					justify-content: center;
 					font-size: 3rem;
 				}
+				.movie-card.state-liked { border-color: #40916c; box-shadow: 0 4px 24px rgba(64,145,108,0.25); }
+				.movie-card.state-disliked { border-color: #d00000; box-shadow: 0 4px 24px rgba(208,0,0,0.25); }
+				.movie-card.state-seen .movie-card-poster { filter: brightness(0.45) grayscale(60%); }
+				
 				.movie-card-overlay {
 					position: absolute;
 					inset: 0;
@@ -241,7 +252,7 @@ export function MovieCard({ recommendation }: Props) {
 				}
 				.mc-delete-btn:hover { background: #d00000; border-color: #ff4d4d; }
 			`}</style>
-			<div className="movie-card">
+			<div className={cardClass}>
 				<button 
 					className="mc-delete-btn" 
 					onClick={handleDelete}

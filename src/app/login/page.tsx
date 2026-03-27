@@ -2,27 +2,36 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { loginAction } from "../auth-actions";
+import { getLibrariesByEmail, setLibraryCookie } from "../auth-actions";
 
 export default function LoginPage() {
 	const [email, setEmail] = useState("");
+	const [libraries, setLibraries] = useState<{ id: string; name: string; frequency: string }[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const router = useRouter();
 
-	async function handleSubmit(e: React.FormEvent) {
+	async function handleSearch(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
 		setLoading(true);
 
 		try {
-			await loginAction(email);
-			// loginAction will redirect on success
+			const libs = await getLibrariesByEmail(email);
+			setLibraries(libs);
 		} catch (err: any) {
 			setError(err.message || "Error al iniciar sesión");
+		} finally {
 			setLoading(false);
 		}
 	}
+
+	async function handleSelect(id: string) {
+		setLoading(true);
+		await setLibraryCookie(id);
+		router.push("/");
+	}
+
 
 	return (
 		<>
@@ -138,6 +147,28 @@ export default function LoginPage() {
 					cursor: pointer;
 				}
 				.login-link:hover { text-decoration: underline; }
+				
+				.login-lib-btn {
+					background: #1a1a1a;
+					border: 1px solid #2a2a2a;
+					border-radius: 8px;
+					padding: 1rem;
+					cursor: pointer;
+					text-align: left;
+					color: #F5F0E8;
+					font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
+					transition: all 0.2s;
+					display: flex;
+					flex-direction: column;
+					gap: 0.25rem;
+				}
+				.login-lib-btn:hover { border-color: #D4A853; background: rgba(212,168,83,0.05); }
+				.login-lib-name { font-size: 1.05rem; font-weight: 600; }
+				.login-lib-meta { font-size: 0.8rem; color: #888; }
+				@media (max-width: 500px) {
+					.login-card { padding: 1.75rem 1.25rem; }
+					.login-title { font-size: 1.15rem; }
+				}
 			`}</style>
 			
 			<div className="login-root">
@@ -153,22 +184,56 @@ export default function LoginPage() {
 						</p>
 					</div>
 
-					<form className="login-form" onSubmit={handleSubmit}>
-						<input
-							type="email"
-							placeholder="tu@email.com"
-							className="login-input"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							required
-						/>
+					{libraries === null ? (
+						<form className="login-form" onSubmit={handleSearch}>
+							<input
+								type="email"
+								placeholder="tu@email.com"
+								className="login-input"
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								required
+							/>
 
-						{error && <div className="login-error">{error}</div>}
+							{error && <div className="login-error">{error}</div>}
 
-						<button type="submit" className="login-btn" disabled={loading || !email}>
-							{loading ? "Entrando..." : "Entrar a mi biblioteca"}
-						</button>
-					</form>
+							<button type="submit" className="login-btn" disabled={loading || !email}>
+								{loading ? "Buscando..." : "Buscar mis bibliotecas"}
+							</button>
+						</form>
+					) : (
+						<div className="login-form">
+							<p style={{ margin: 0, color: "#888", fontSize: "0.9rem", textAlign: "center" }}>
+								¿A qué biblioteca querés entrar?
+							</p>
+							{libraries.map((lib) => (
+								<button 
+									key={lib.id} 
+									className="login-lib-btn" 
+									onClick={() => handleSelect(lib.id)} 
+									disabled={loading}
+								>
+									<span className="login-lib-name">{lib.name}</span>
+									<span className="login-lib-meta">Recomendación {lib.frequency === "daily" ? "Diaria" : "Semanal"}</span>
+								</button>
+							))}
+							<button 
+								className="login-lib-btn" 
+								style={{ borderStyle: "dashed", borderColor: "rgba(212,168,83,0.3)", alignItems: "center", justifyContent: "center", color: "#D4A853" }}
+								onClick={() => router.push("/onboarding")}
+								disabled={loading}
+							>
+								<span className="login-lib-name">+ Crear nueva biblioteca</span>
+							</button>
+							<button 
+								onClick={() => setLibraries(null)} 
+								style={{ background: "none", border: "none", color: "#D4A853", cursor: "pointer", marginTop: "0.5rem" }}
+							>
+								← Usar otro email
+							</button>
+						</div>
+					)}
+
 
 					<div className="login-footer">
 						¿No tenés una cuenta?{" "}

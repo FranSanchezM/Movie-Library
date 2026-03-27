@@ -63,8 +63,10 @@ async function processLibrary(libraryId: string) {
 		return;
 	}
 
-	// Send email via shared helper
-	await sendMovieEmail(library.email, library.name, library.frequency, movie);
+	// Send email via shared helper if opted in
+	if (library.receives_emails !== false) {
+		await sendMovieEmail(library.email, library.name, library.frequency, movie);
+	}
 }
 
 // ─────────────────────────────────────────────

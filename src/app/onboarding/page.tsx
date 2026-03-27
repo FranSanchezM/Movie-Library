@@ -45,6 +45,7 @@ interface FormState {
 	yearTo: number;
 	frequency: "daily" | "weekly";
 	dayOfWeek: number;
+	receivesEmails: boolean;
 }
 
 export default function OnboardingPage() {
@@ -61,6 +62,7 @@ export default function OnboardingPage() {
 		yearTo: CURRENT_YEAR,
 		frequency: "weekly",
 		dayOfWeek: 1,
+		receivesEmails: true,
 	});
 
 	function toggleGenre(id: number) {
@@ -99,6 +101,7 @@ export default function OnboardingPage() {
 					year_to: form.yearTo,
 					frequency: form.frequency,
 					day_of_week: form.frequency === "weekly" ? form.dayOfWeek : null,
+					receives_emails: form.receivesEmails,
 				});
 			} catch (e) {
 				setError("No se pudo crear la biblioteca. Intentá de nuevo.");
@@ -333,6 +336,10 @@ export default function OnboardingPage() {
 					color: #aaa;
 				}
 				.ob-summary-row span:last-child { color: #F5F0E8; font-weight: 500; }
+				@media (max-width: 500px) {
+					.ob-card { padding: 1.75rem 1.25rem; }
+					.ob-step-title { font-size: 1.7rem; }
+				}
 			`}</style>
 
 			<div className="ob-root">
@@ -388,6 +395,18 @@ export default function OnboardingPage() {
 											setForm((prev) => ({ ...prev, email: e.target.value }))
 										}
 									/>
+								</div>
+								<div className="ob-field" style={{ flexDirection: "row", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
+									<input
+										type="checkbox"
+										id="receivesEmails"
+										checked={form.receivesEmails}
+										onChange={(e) => setForm(prev => ({ ...prev, receivesEmails: e.target.checked }))}
+										style={{ cursor: "pointer", width: "16px", height: "16px", accentColor: "#D4A853" }}
+									/>
+									<label htmlFor="receivesEmails" style={{ fontSize: "0.85rem", color: "#aaa", cursor: "pointer", userSelect: "none" }}>
+										Recibir recomendaciones por email
+									</label>
 								</div>
 							</div>
 

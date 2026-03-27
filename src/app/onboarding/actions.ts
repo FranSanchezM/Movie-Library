@@ -12,6 +12,7 @@ export async function createLibraryAction(data: {
 	year_to: number;
 	frequency: "daily" | "weekly";
 	day_of_week?: number | null;
+	receives_emails?: boolean;
 }) {
 	const supabase = createClient();
 

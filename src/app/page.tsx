@@ -199,6 +199,11 @@ export default async function HomePage() {
 					line-height: 1.6;
 					margin: 0;
 				}
+				@media (max-width: 640px) {
+					.cr-header { padding: 1rem; }
+					.cr-header-inner { flex-direction: column; align-items: flex-start; gap: 0.8rem; }
+					.cr-main { padding: 1.5rem 1rem 3rem; }
+				}
 			`}</style>
 
 			<div className="cr-page">
