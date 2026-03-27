@@ -18,6 +18,7 @@ export interface Library {
 	year_to: number;
 	frequency: "daily" | "weekly";
 	day_of_week: number | null;
+	receives_emails: boolean;
 	created_at: string;
 }
 

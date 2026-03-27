@@ -109,14 +109,16 @@ export default function OnboardingPage() {
 				return;
 			}
 
-			// Trigger first recommendation immediately (fire and forget is intentional)
-			fetch("/api/recommend", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ libraryId: library.id }),
-			}).catch(() => {
-				// silently ignore; home page handles empty state gracefully
-			});
+			// Trigger first recommendation and wait for it
+			try {
+				await fetch("/api/recommend", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ libraryId: library.id }),
+				});
+			} catch (err) {
+				console.error("Error generating first recommendation:", err);
+			}
 
 			router.push("/");
 		} catch {

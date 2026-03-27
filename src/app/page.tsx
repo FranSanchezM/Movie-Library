@@ -63,7 +63,23 @@ export default async function HomePage() {
 		redirect("/onboarding");
 	}
 
-	const recommendations = await getRecommendations(library.id);
+	let recommendations = await getRecommendations(library.id);
+
+	if (recommendations.length === 0) {
+		// No film yet? Trigger it on-the-fly
+		try {
+			// We use the absolute internal URL for server-side fetch
+			await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/recommend`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ libraryId: library.id }),
+			});
+			// Refetch after generation
+			recommendations = await getRecommendations(library.id);
+		} catch (err) {
+			console.error("Error auto-generating first recommendation:", err);
+		}
+	}
 
 	return (
 		<>
@@ -227,7 +243,11 @@ export default async function HomePage() {
 							</div>
 						</div>
 
-						<HomeActions libraryId={library.id} />
+						<HomeActions
+							libraryId={library.id}
+							libraryEmail={library.email}
+							receivesEmails={library.receives_emails}
+						/>
 					</div>
 				</header>
 

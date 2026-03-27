@@ -27,13 +27,19 @@ export async function sendMovieEmail(
 	);
 
 	try {
+		if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+			console.error("⚠️ Nodemailer: Falta EMAIL_USER o EMAIL_PASS en el .env");
+			return;
+		}
+
 		await transporter.sendMail({
-			from: `"CineRandom" <${process.env.EMAIL_USER}>`, // Aparecerá como CineRandom pero desde tu Gmail
+			from: `"CineRandom" <${process.env.EMAIL_USER}>`,
 			to: email,
 			subject: `🎬 Tu recomendación ${frequency === "daily" ? "de hoy" : "de la semana"}: ${movie.title}`,
 			html,
 		});
+		console.log(`✅ Email enviado a ${email} para la película: ${movie.title}`);
 	} catch (error) {
-		console.error("Error enviando email con Nodemailer:", error);
+		console.error("❌ Error enviando email con Nodemailer:", error);
 	}
 }

@@ -3,15 +3,34 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { logoutAction } from "./auth-actions";
+import { updateLibrarySettings, deleteLibraryAction } from "./settings-actions";
 
 interface Props {
 	libraryId: string;
+	libraryEmail: string;
+	receivesEmails: boolean;
 }
 
-export default function HomeActions({ libraryId }: Props) {
+export default function HomeActions({ libraryId, libraryEmail, receivesEmails }: Props) {
 	const router = useRouter();
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [emailOn, setEmailOn] = useState(receivesEmails);
+
+	async function handleToggleEmail() {
+		const nextState = !emailOn;
+		setEmailOn(nextState);
+		try {
+			await updateLibrarySettings(libraryId, { receives_emails: nextState });
+		} catch {
+			setEmailOn(emailOn); // rollback
+		}
+	}
+
+	async function handleSwitchLibrary() {
+		setLoading(true);
+		router.push(`/login?email=${encodeURIComponent(libraryEmail)}`);
+	}
 
 	async function handleRecommend() {
 		setLoading(true);
@@ -96,8 +115,29 @@ export default function HomeActions({ libraryId }: Props) {
 					color: #F5F0E8;
 					border-color: #555;
 				}
+				.cr-action-small-btn {
+					background: transparent;
+					border: 1px solid #2a2a2a;
+					color: #888;
+					border-radius: 8px;
+					padding: 0.6rem;
+					cursor: pointer;
+					transition: all 0.18s ease;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				}
+				.cr-action-small-btn:hover {
+					color: #F5F0E8;
+					border-color: #555;
+				}
+				.cr-action-small-btn.delete:hover {
+					color: #d00000;
+					border-color: #d00000;
+					background: rgba(208,0,0,0.1);
+				}
 			`}</style>
-			<div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+			<div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", flexWrap: "wrap", justifyContent: "flex-end" }}>
 				<div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", alignItems: "flex-end" }}>
 					<button
 						type="button"
@@ -109,11 +149,34 @@ export default function HomeActions({ libraryId }: Props) {
 					</button>
 					{error && <p className="cr-actions-error">{error}</p>}
 				</div>
+
+				<button 
+					type="button" 
+					onClick={handleToggleEmail} 
+					className="cr-action-small-btn"
+					disabled={loading}
+					title={emailOn ? "Emails activados. Tocar para apagar" : "Emails apagados. Tocar para prender"}
+				>
+					{emailOn ? "🔔" : "🔕"}
+				</button>
+
+				<button 
+					type="button" 
+					onClick={handleSwitchLibrary} 
+					className="cr-logout-btn"
+					disabled={loading}
+					title="Ver todas mis bibliotecas"
+					style={{ color: "#D4A853", borderColor: "rgba(212,168,83,0.3)" }}
+				>
+					Mis Bibliotecas
+				</button>
+
 				<button 
 					type="button" 
 					onClick={() => logoutAction()} 
 					className="cr-logout-btn"
-					title="Cerrar sesión"
+					disabled={loading}
+					title="Cambiar de cuenta o salir"
 				>
 					Salir
 				</button>

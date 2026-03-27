@@ -1,35 +1,67 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { getLibrariesByEmail, setLibraryCookie } from "../auth-actions";
+import { deleteLibraryAction } from "../settings-actions";
 
-export default function LoginPage() {
+function LoginContent() {
 	const [email, setEmail] = useState("");
 	const [libraries, setLibraries] = useState<{ id: string; name: string; frequency: string }[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
+	const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const urlEmail = searchParams.get("email");
 
-	async function handleSearch(e: React.FormEvent) {
-		e.preventDefault();
+	const handleSearch = useCallback(async (emailToSearch: string) => {
 		setError(null);
 		setLoading(true);
 
 		try {
-			const libs = await getLibrariesByEmail(email);
+			const libs = await getLibrariesByEmail(emailToSearch);
 			setLibraries(libs);
 		} catch (err: any) {
 			setError(err.message || "Error al iniciar sesión");
+			setLibraries(null);
 		} finally {
 			setLoading(false);
 		}
+	}, []);
+
+	useEffect(() => {
+		if (urlEmail) {
+			setEmail(urlEmail);
+			handleSearch(urlEmail);
+		}
+	}, [urlEmail, handleSearch]);
+
+	async function onFormSubmit(e: React.FormEvent) {
+		e.preventDefault();
+		handleSearch(email);
 	}
 
 	async function handleSelect(id: string) {
 		setLoading(true);
 		await setLibraryCookie(id);
 		router.push("/");
+	}
+
+	async function handleDelete(id: string) {
+		setLoading(true);
+		setConfirmDelete(null);
+		try {
+			await deleteLibraryAction(id);
+			// After deletion, re-fetch to update UI without full page reload if possible
+			// or just let the server action's redirect handle the fresh state.
+			const libs = await getLibrariesByEmail(email);
+			setLibraries(libs);
+		} catch (err: any) {
+			setError(err.message || "Error al borrar");
+		} finally {
+			setLoading(false);
+		}
 	}
 
 
@@ -165,6 +197,87 @@ export default function LoginPage() {
 				.login-lib-btn:hover { border-color: #D4A853; background: rgba(212,168,83,0.05); }
 				.login-lib-name { font-size: 1.05rem; font-weight: 600; }
 				.login-lib-meta { font-size: 0.8rem; color: #888; }
+				.login-lib-row {
+					display: flex;
+					gap: 0.5rem;
+					width: 100%;
+				}
+				.login-lib-delete {
+					background: rgba(208,0,0,0.1);
+					border: 1px solid rgba(208,0,0,0.2);
+					color: #d00000;
+					border-radius: 8px;
+					width: 48px;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					cursor: pointer;
+					transition: all 0.2s;
+					font-size: 1.2rem;
+				}
+				.login-lib-delete:hover {
+					background: #d00000;
+					color: #F5F0E8;
+				}
+
+				.modal-overlay {
+					position: fixed;
+					inset: 0;
+					background: rgba(0,0,0,0.8);
+					backdrop-filter: blur(4px);
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					z-index: 100;
+					padding: 1.5rem;
+				}
+				.modal-card {
+					background: #121212;
+					border: 1px solid #2a2a2a;
+					padding: 2rem;
+					border-radius: 16px;
+					max-width: 400px;
+					width: 100%;
+					text-align: center;
+					box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+				}
+				.modal-title {
+					font-family: var(--font-bebas-neue), 'Bebas Neue', cursive;
+					font-size: 1.8rem;
+					color: #F5F0E8;
+					margin-bottom: 0.5rem;
+				}
+				.modal-text {
+					color: #888;
+					font-size: 0.95rem;
+					margin-bottom: 2rem;
+					line-height: 1.5;
+				}
+				.modal-actions {
+					display: flex;
+					gap: 0.75rem;
+				}
+				.modal-btn {
+					flex: 1;
+					padding: 0.75rem;
+					border-radius: 8px;
+					font-weight: 600;
+					cursor: pointer;
+					transition: all 0.2s;
+				}
+				.modal-btn-cancel {
+					background: #1a1a1a;
+					border: 1px solid #2a2a2a;
+					color: #888;
+				}
+				.modal-btn-cancel:hover { color: #F5F0E8; border-color: #444; }
+				.modal-btn-delete {
+					background: #d00000;
+					border: none;
+					color: #F5F0E8;
+				}
+				.modal-btn-delete:hover { background: #ff1a1a; transform: translateY(-1px); }
+
 				@media (max-width: 500px) {
 					.login-card { padding: 1.75rem 1.25rem; }
 					.login-title { font-size: 1.15rem; }
@@ -185,7 +298,7 @@ export default function LoginPage() {
 					</div>
 
 					{libraries === null ? (
-						<form className="login-form" onSubmit={handleSearch}>
+						<form className="login-form" onSubmit={onFormSubmit}>
 							<input
 								type="email"
 								placeholder="tu@email.com"
@@ -207,15 +320,28 @@ export default function LoginPage() {
 								¿A qué biblioteca querés entrar?
 							</p>
 							{libraries.map((lib) => (
-								<button 
-									key={lib.id} 
-									className="login-lib-btn" 
-									onClick={() => handleSelect(lib.id)} 
-									disabled={loading}
-								>
-									<span className="login-lib-name">{lib.name}</span>
-									<span className="login-lib-meta">Recomendación {lib.frequency === "daily" ? "Diaria" : "Semanal"}</span>
-								</button>
+								<div key={lib.id} className="login-lib-row">
+									<button 
+										className="login-lib-btn" 
+										style={{ flex: 1 }}
+										onClick={() => handleSelect(lib.id)} 
+										disabled={loading}
+									>
+										<span className="login-lib-name">{lib.name}</span>
+										<span className="login-lib-meta">Recomendación {lib.frequency === "daily" ? "Diaria" : "Semanal"}</span>
+									</button>
+									<button 
+										className="login-lib-delete"
+										onClick={(e) => {
+											e.stopPropagation();
+											setConfirmDelete({ id: lib.id, name: lib.name });
+										}}
+										disabled={loading}
+										title="Borrar biblioteca"
+									>
+										🗑
+									</button>
+								</div>
 							))}
 							<button 
 								className="login-lib-btn" 
@@ -243,6 +369,34 @@ export default function LoginPage() {
 					</div>
 				</div>
 			</div>
+
+			{confirmDelete && (
+				<div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+					<div className="modal-card" onClick={e => e.stopPropagation()}>
+						<h3 className="modal-title">¿Borrar biblioteca?</h3>
+						<p className="modal-text">
+							Estás por eliminar <strong>"{confirmDelete.name}"</strong>. 
+							Esta acción no se puede deshacer y perderás todas tus recomendaciones.
+						</p>
+						<div className="modal-actions">
+							<button className="modal-btn modal-btn-cancel" onClick={() => setConfirmDelete(null)}>
+								Cancelar
+							</button>
+							<button className="modal-btn modal-btn-delete" onClick={() => handleDelete(confirmDelete.id)}>
+								Sí, borrar
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</>
+	);
+}
+
+export default function LoginPage() {
+	return (
+		<Suspense fallback={<div style={{ minHeight: "100dvh", background: "#080808" }} />}>
+			<LoginContent />
+		</Suspense>
 	);
 }
