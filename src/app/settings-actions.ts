@@ -62,16 +62,14 @@ export async function saveMediaPreferencesAction(input: unknown) {
 		enabled: true,
 	});
 
-	const { error } = await supabase
-		.from("profile_preferences")
-		.upsert(
-			{
-				...prefs,
-				profile_id: profile.id,
-				updated_at: new Date().toISOString(),
-			},
-			{ onConflict: "profile_id,media_type" },
-		);
+	const { error } = await supabase.from("profile_preferences").upsert(
+		{
+			...prefs,
+			profile_id: profile.id,
+			updated_at: new Date().toISOString(),
+		},
+		{ onConflict: "profile_id,media_type" },
+	);
 
 	if (error) {
 		console.error("Error saving media preferences:", error);
@@ -106,5 +104,7 @@ export async function getWatchProvidersAction(
 	if (!isMediaType(mediaType)) return [];
 	if (!isValidCountry(country) || !isValidLanguage(language)) return [];
 	if (!(await getCurrentUser())) return [];
-	return getMediaProvider(mediaType).listWatchProviders(country, language);
+	return (
+		getMediaProvider(mediaType).listWatchProviders?.(country, language) ?? []
+	);
 }

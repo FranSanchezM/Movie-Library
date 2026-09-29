@@ -1,6 +1,9 @@
 import {
 	MEDIA_TYPES,
 	type MediaType,
+	type MediaTypeConfig,
+	type OptionValue,
+	defaultOptions,
 	getMediaConfig,
 	isMediaType,
 } from "@/config/media";
@@ -24,6 +27,8 @@ export interface MediaPreferencesInput {
 	year_from: number;
 	year_to: number;
 	provider_ids: number[];
+	/** Media-specific options (whitelisted per media type) */
+	options: Record<string, OptionValue>;
 }
 
 export interface SettingsInput {
@@ -53,6 +58,29 @@ export function isValidLanguage(language: unknown): language is Language {
 
 function isPositiveInt(n: unknown): n is number {
 	return typeof n === "number" && Number.isInteger(n) && n > 0;
+}
+
+/** Only the media type's own option keys, each within its allowed choices. */
+function parseOptions(
+	config: MediaTypeConfig,
+	raw: unknown,
+): Record<string, OptionValue> {
+	if (config.fields.length === 0) return {};
+	if (raw !== undefined && (typeof raw !== "object" || raw === null)) {
+		throw new Error("Opciones inválidas");
+	}
+	const input = (raw ?? {}) as Record<string, unknown>;
+	const fallback = defaultOptions(config.id, "");
+
+	const out: Record<string, OptionValue> = {};
+	for (const field of config.fields) {
+		const value = input[field.key] ?? fallback[field.key];
+		if (!field.choices.some((c) => c.value === value)) {
+			throw new Error(`${field.label}: valor inválido`);
+		}
+		out[field.key] = value as OptionValue;
+	}
+	return out;
 }
 
 function parseProfile(d: Record<string, unknown>): ProfileInput {
@@ -110,7 +138,8 @@ export function parsePreferences(
 		);
 	}
 
-	const providerRaw = d.provider_ids ?? [];
+	// Media types without streaming platforms ignore any provider ids
+	const providerRaw = config.usesProviders ? (d.provider_ids ?? []) : [];
 	if (
 		!Array.isArray(providerRaw) ||
 		providerRaw.length > MAX_PROVIDERS ||
@@ -126,6 +155,7 @@ export function parsePreferences(
 		year_from: d.year_from as number,
 		year_to: d.year_to as number,
 		provider_ids: [...new Set(providerRaw as number[])],
+		options: parseOptions(config, d.options),
 	};
 }
 

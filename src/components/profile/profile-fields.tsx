@@ -1,7 +1,12 @@
 "use client";
 
 import { getWatchProvidersAction } from "@/app/settings-actions";
-import { type MediaType, getMediaConfig } from "@/config/media";
+import {
+	type MediaType,
+	type OptionValue,
+	defaultOptions,
+	getMediaConfig,
+} from "@/config/media";
 import {
 	COUNTRIES,
 	DELIVERY_DAYS,
@@ -30,6 +35,7 @@ export interface MediaPrefsValues {
 	yearFrom: number;
 	yearTo: number;
 	providerIds: number[];
+	options: Record<string, OptionValue>;
 }
 
 export type PrefsByType = Partial<Record<MediaType, MediaPrefsValues>>;
@@ -46,13 +52,18 @@ interface FieldsProps {
 	disabled?: boolean;
 }
 
-export function defaultPrefs(enabled: boolean): MediaPrefsValues {
+export function defaultPrefs(
+	enabled: boolean,
+	mediaType: MediaType,
+	profileLanguage: Language,
+): MediaPrefsValues {
 	return {
 		enabled,
 		genres: [],
-		yearFrom: 1990,
+		yearFrom: getMediaConfig(mediaType).defaultYearFrom,
 		yearTo: getCurrentYear(),
 		providerIds: [],
+		options: defaultOptions(mediaType, profileLanguage),
 	};
 }
 
@@ -76,6 +87,7 @@ export function toSettingsInput(
 				year_from: p.yearFrom,
 				year_to: p.yearTo,
 				provider_ids: p.providerIds,
+				options: p.options,
 			}),
 		),
 	};
@@ -224,7 +236,8 @@ interface TasteFieldsProps {
 	disabled?: boolean;
 }
 
-export function TasteFields({
+/** Streaming platforms (media types filtered by availability only). */
+function ProvidersField({
 	mediaType,
 	values,
 	country,
@@ -239,8 +252,6 @@ export function TasteFields({
 		language,
 	);
 	const { providerIds } = values;
-	const onChange = (patch: Partial<MediaPrefsValues>) =>
-		onPrefsChange(mediaType, patch);
 
 	// Drop selected platforms that do not exist in the chosen country.
 	useEffect(() => {
@@ -251,6 +262,98 @@ export function TasteFields({
 			onPrefsChange(mediaType, { providerIds: kept });
 	}, [providers, providerIds, mediaType, onPrefsChange]);
 
+	function toggleProvider(id: number) {
+		onPrefsChange(mediaType, {
+			providerIds: providerIds.includes(id)
+				? providerIds.filter((p) => p !== id)
+				: [...providerIds, id],
+		});
+	}
+
+	return (
+		<div className="ob-field">
+			<span className="ob-label">Mis plataformas de streaming</span>
+			{loading ? (
+				<p className="ob-hint">Cargando plataformas…</p>
+			) : providers.length === 0 ? (
+				<p className="ob-hint">
+					No pudimos cargar las plataformas para este país. Si no elegís
+					ninguna, no se filtrará por plataforma.
+				</p>
+			) : (
+				<div className="ob-genres ob-providers">
+					{providers.map((p) => (
+						<button
+							type="button"
+							key={p.id}
+							disabled={disabled}
+							className={`ob-genre-btn ob-provider-btn${providerIds.includes(p.id) ? " selected" : ""}`}
+							onClick={() => toggleProvider(p.id)}
+						>
+							{p.logoPath && (
+								<img
+									className="ob-provider-logo"
+									src={`https://image.tmdb.org/t/p/w45${p.logoPath}`}
+									alt=""
+									loading="lazy"
+								/>
+							)}
+							{p.name}
+						</button>
+					))}
+				</div>
+			)}
+			<p className="ob-hint">
+				Solo te recomendaremos {config.label.toLowerCase()} disponibles en tus
+				plataformas. Si no elegís ninguna, no se filtra por plataforma.
+			</p>
+		</div>
+	);
+}
+
+/** Media-specific choices (books: length, language, minimum rating), from the registry. */
+function OptionFields({
+	mediaType,
+	values,
+	onChange,
+	disabled,
+}: TasteFieldsProps) {
+	const config = getMediaConfig(mediaType);
+
+	return (
+		<>
+			{config.fields.map((field) => (
+				<div className="ob-field" key={field.key}>
+					<span className="ob-label">{field.label}</span>
+					<div className="ob-genres">
+						{field.choices.map((c) => (
+							<button
+								type="button"
+								key={String(c.value)}
+								disabled={disabled}
+								className={`ob-genre-btn${values.options[field.key] === c.value ? " selected" : ""}`}
+								onClick={() =>
+									onChange(mediaType, {
+										options: { ...values.options, [field.key]: c.value },
+									})
+								}
+							>
+								{c.label}
+							</button>
+						))}
+					</div>
+				</div>
+			))}
+		</>
+	);
+}
+
+export function TasteFields(props: TasteFieldsProps) {
+	const { mediaType, values, onChange: onPrefsChange, disabled } = props;
+	const config = getMediaConfig(mediaType);
+	const onChange = (patch: Partial<MediaPrefsValues>) =>
+		onPrefsChange(mediaType, patch);
+
 	function toggleGenre(id: number) {
 		onChange({
 			genres: values.genres.includes(id)
@@ -259,18 +362,12 @@ export function TasteFields({
 		});
 	}
 
-	function toggleProvider(id: number) {
-		onChange({
-			providerIds: providerIds.includes(id)
-				? providerIds.filter((p) => p !== id)
-				: [...providerIds, id],
-		});
-	}
-
 	return (
 		<div className="ob-stack">
 			<div className="ob-field">
-				<span className="ob-label">Géneros</span>
+				<span className="ob-label">
+					{config.usesProviders ? "Géneros" : "Temas"}
+				</span>
 				<div className="ob-genres">
 					{config.genres.map((g) => (
 						<button
@@ -287,7 +384,11 @@ export function TasteFields({
 			</div>
 
 			<div className="ob-field">
-				<span className="ob-label">Rango de años</span>
+				<span className="ob-label">
+					{mediaType === "book"
+						? "Año de primera publicación"
+						: "Rango de años"}
+				</span>
 				<div className="ob-range-row">
 					<span className="ob-range-label">Desde</span>
 					<input
@@ -316,43 +417,9 @@ export function TasteFields({
 				</div>
 			</div>
 
-			<div className="ob-field">
-				<span className="ob-label">Mis plataformas de streaming</span>
-				{loading ? (
-					<p className="ob-hint">Cargando plataformas…</p>
-				) : providers.length === 0 ? (
-					<p className="ob-hint">
-						No pudimos cargar las plataformas para este país. Si no elegís
-						ninguna, no se filtrará por plataforma.
-					</p>
-				) : (
-					<div className="ob-genres ob-providers">
-						{providers.map((p) => (
-							<button
-								type="button"
-								key={p.id}
-								disabled={disabled}
-								className={`ob-genre-btn ob-provider-btn${providerIds.includes(p.id) ? " selected" : ""}`}
-								onClick={() => toggleProvider(p.id)}
-							>
-								{p.logoPath && (
-									<img
-										className="ob-provider-logo"
-										src={`https://image.tmdb.org/t/p/w45${p.logoPath}`}
-										alt=""
-										loading="lazy"
-									/>
-								)}
-								{p.name}
-							</button>
-						))}
-					</div>
-				)}
-				<p className="ob-hint">
-					Solo te recomendaremos {config.label.toLowerCase()} disponibles en tus
-					plataformas. Si no elegís ninguna, no se filtra por plataforma.
-				</p>
-			</div>
+			<OptionFields {...props} />
+
+			{config.usesProviders && <ProvidersField {...props} />}
 		</div>
 	);
 }

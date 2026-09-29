@@ -42,6 +42,8 @@ export interface ProfilePreferences {
 	year_to: number;
 	/** TMDB watch provider ids the user subscribes to. Empty = no filter. */
 	provider_ids: number[];
+	/** Media-specific options (books: length, language, min_rating). */
+	options: Record<string, string | number>;
 }
 
 /** One library per profile and calendar year (holds every media type). */
@@ -57,7 +59,12 @@ export interface Recommendation {
 	profile_id: string;
 	library_id: string;
 	media_type: MediaType;
-	tmdb_id: number;
+	/** Id in the source catalog (TMDB id, Open Library work id, ...) */
+	external_id: string;
+	/** Only for TMDB-backed types */
+	tmdb_id: number | null;
+	/** Author(s) (books) */
+	creator: string | null;
 	imdb_id: string | null;
 	title: string;
 	slug: string | null;
@@ -67,6 +74,11 @@ export interface Recommendation {
 	tmdb_rating: number | null;
 	imdb_rating: string | null;
 	rt_rating: string | null;
+	/** Generic source rating out of 5 (books: Open Library) and its vote count */
+	rating: number | null;
+	rating_count: number | null;
+	/** Page count (books) */
+	pages: number | null;
 	/** Number of seasons (series only). */
 	seasons: number | null;
 	is_seen: boolean | null;

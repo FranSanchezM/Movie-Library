@@ -15,7 +15,7 @@ import {
 	toSettingsInput,
 } from "@/components/profile/profile-fields";
 import { ProfileFormStyles } from "@/components/profile/profile-form-styles";
-import { MEDIA_TYPES } from "@/config/media";
+import { MEDIA_TYPES, defaultOptions } from "@/config/media";
 import type { Profile, ProfilePreferences } from "@/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -55,8 +55,12 @@ export default function SettingsForm({
 								yearFrom: row.year_from,
 								yearTo: row.year_to,
 								providerIds: row.provider_ids,
+								options: {
+									...defaultOptions(m.id, profile.language),
+									...(row.options ?? {}),
+								},
 							}
-						: defaultPrefs(false),
+						: defaultPrefs(false, m.id, profile.language),
 				];
 			}),
 		),

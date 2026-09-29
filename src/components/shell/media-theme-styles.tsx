@@ -11,9 +11,15 @@ function colorVars(c: ThemeColors): string {
 function buildCss(): string {
 	const rules = SECTIONS.map((s) => {
 		const shape = `--m-radius:${s.theme.cardRadius};--m-ratio:${s.theme.posterRatio};--m-title-font:${s.theme.titleFont};--m-title-tracking:${s.theme.titleTracking};--m-title-transform:${s.theme.titleTransform};`;
+		// Distinctive card detail: a spine-like edge (books)
+		const edge =
+			s.theme.cardEdge === "spine"
+				? `[data-media="${s.slug}"] .movie-card{border-left:6px solid var(--m-accent);box-shadow:inset 3px 0 6px rgba(0,0,0,.45);}`
+				: "";
 		return [
 			`[data-media="${s.slug}"]{${colorVars(s.theme.light)}${shape}}`,
 			`.dark [data-media="${s.slug}"]{${colorVars(s.theme.dark)}}`,
+			edge,
 		].join("\n");
 	});
 

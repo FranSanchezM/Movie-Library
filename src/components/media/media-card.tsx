@@ -33,6 +33,10 @@ export function MediaCard({ recommendation }: Props) {
 		slug,
 		imdb_id,
 		seasons,
+		creator,
+		rating,
+		rating_count,
+		pages,
 		media_type,
 	} = recommendation;
 
@@ -295,12 +299,16 @@ export function MediaCard({ recommendation }: Props) {
 				{/* Static footer visible on idle */}
 				<div className="movie-card-footer">
 					<p className="movie-card-title">{title}</p>
-					<p className="movie-card-year">{release_year ?? "—"}</p>
+					<p className="movie-card-year">
+						{creator ? `${creator} · ` : ""}
+						{release_year || "—"}
+					</p>
 				</div>
 
 				{/* Hover overlay */}
 				<div className="movie-card-overlay">
 					<p className="movie-card-overlay-title">{title}</p>
+					{creator && <p className="movie-card-year">{creator}</p>}
 
 					<div className="movie-card-ratings">
 						{tmdb_rating != null && (
@@ -316,6 +324,14 @@ export function MediaCard({ recommendation }: Props) {
 						{rt_rating && (
 							<span className="movie-card-rating-badge">🍅 RT {rt_rating}</span>
 						)}
+						{rating != null && (
+							<span className="movie-card-rating-badge">
+								⭐ {rating}/5{rating_count ? ` (${rating_count})` : ""}
+							</span>
+						)}
+						{pages ? (
+							<span className="movie-card-rating-badge">📖 {pages} pág.</span>
+						) : null}
 						{seasons ? (
 							<span className="movie-card-rating-badge">
 								📺 {seasons} {seasons === 1 ? "temporada" : "temporadas"}

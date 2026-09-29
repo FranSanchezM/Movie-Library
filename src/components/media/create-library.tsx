@@ -33,7 +33,9 @@ export function CreateLibrary({
 	const [open, setOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [prefs, setPrefs] = useState<MediaPrefsValues>(defaultPrefs(true));
+	const [prefs, setPrefs] = useState<MediaPrefsValues>(
+		defaultPrefs(true, mediaType, language),
+	);
 
 	const handleChange = useCallback<MediaPrefsChange>((_type, patch) => {
 		setPrefs((prev) => ({ ...prev, ...patch }));
@@ -49,6 +51,7 @@ export function CreateLibrary({
 				year_from: prefs.yearFrom,
 				year_to: prefs.yearTo,
 				provider_ids: prefs.providerIds,
+				options: prefs.options,
 			});
 			router.refresh();
 		} catch (e) {

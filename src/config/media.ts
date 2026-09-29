@@ -1,11 +1,24 @@
 // Media type registry (client + server safe: no server-only imports).
 // Adding a media type = add an entry here + a provider in src/lib/media.ts.
 
-export type MediaType = "movie" | "tv";
+export type MediaType = "movie" | "tv" | "book";
 
 export interface Genre {
 	id: number;
 	label: string;
+	/** Source-specific key (Open Library subject slug for books) */
+	key?: string;
+}
+
+/** Media-specific preference stored in profile_preferences.options. */
+export type OptionValue = string | number;
+
+export interface OptionField {
+	key: string;
+	label: string;
+	choices: readonly { value: OptionValue; label: string }[];
+	/** "profile-language" resolves to the profile language when it is a choice */
+	default: OptionValue | "profile-language";
 }
 
 export interface ThemeColors {
@@ -28,6 +41,8 @@ export interface MediaTheme {
 	titleFont: string;
 	titleTracking: string;
 	titleTransform: "none" | "uppercase";
+	/** Distinctive card detail (book spine edge) */
+	cardEdge?: "spine";
 }
 
 /** Shared by implemented media types and upcoming sections. */
@@ -49,6 +64,12 @@ export interface MediaTypeConfig extends SectionBase {
 	/** Label of the external link stored in recommendations.slug */
 	primaryLinkLabel: string;
 	genres: readonly Genre[];
+	/** Watch-provider (streaming platform) filter applies */
+	usesProviders: boolean;
+	/** First year offered by default in the year range */
+	defaultYearFrom: number;
+	/** Extra per-media preferences, rendered generically by the forms */
+	fields: readonly OptionField[];
 }
 
 /** A section that is planned but not implemented yet. */
@@ -59,6 +80,7 @@ export interface UpcomingSection extends SectionBase {
 
 export type Section = MediaTypeConfig | UpcomingSection;
 
+const SERIF = "Georgia, 'Times New Roman', serif";
 const BEBAS = "var(--font-bebas-neue), 'Bebas Neue', cursive";
 const SANS = "var(--font-dm-sans), 'DM Sans', sans-serif";
 
@@ -102,6 +124,64 @@ const TV_GENRES: readonly Genre[] = [
 	{ id: 37, label: "Western" },
 ];
 
+// Open Library subjects (key = subject slug)
+const BOOK_GENRES: readonly Genre[] = [
+	{ id: 1, label: "Ficción", key: "fiction" },
+	{ id: 2, label: "Ciencia ficción", key: "science_fiction" },
+	{ id: 3, label: "Fantasía", key: "fantasy" },
+	{ id: 4, label: "Misterio", key: "mystery" },
+	{ id: 5, label: "Thriller", key: "thriller" },
+	{ id: 6, label: "Romance", key: "romance" },
+	{ id: 7, label: "Terror", key: "horror" },
+	{ id: 8, label: "Novela histórica", key: "historical_fiction" },
+	{ id: 9, label: "Biografía", key: "biography" },
+	{ id: 10, label: "Ensayo y no ficción", key: "nonfiction" },
+	{ id: 11, label: "Ciencia", key: "science" },
+	{ id: 12, label: "Historia", key: "history" },
+	{ id: 13, label: "Filosofía", key: "philosophy" },
+	{ id: 14, label: "Psicología", key: "psychology" },
+	{ id: 15, label: "Autoayuda", key: "self-help" },
+	{ id: 16, label: "Negocios", key: "business" },
+	{ id: 17, label: "Cómic y novela gráfica", key: "graphic_novels" },
+	{ id: 18, label: "Poesía", key: "poetry" },
+	{ id: 19, label: "Clásicos", key: "classic_literature" },
+	{ id: 20, label: "Juvenil", key: "young_adult_fiction" },
+];
+
+const BOOK_FIELDS: readonly OptionField[] = [
+	{
+		key: "length",
+		label: "Extensión",
+		choices: [
+			{ value: "short", label: "Corto (menos de 250 pág.)" },
+			{ value: "medium", label: "Medio (250 a 450 pág.)" },
+			{ value: "long", label: "Largo (más de 450 pág.)" },
+			{ value: "any", label: "Cualquiera" },
+		],
+		default: "any",
+	},
+	{
+		key: "language",
+		label: "Idioma del libro",
+		choices: [
+			{ value: "es", label: "Español" },
+			{ value: "en", label: "Inglés" },
+			{ value: "any", label: "Cualquiera" },
+		],
+		default: "profile-language",
+	},
+	{
+		key: "min_rating",
+		label: "Valoración mínima",
+		choices: [
+			{ value: 3, label: "3,0 o más" },
+			{ value: 3.5, label: "3,5 o más" },
+			{ value: 4, label: "4,0 o más" },
+		],
+		default: 3.5,
+	},
+];
+
 export const MEDIA_TYPES: readonly MediaTypeConfig[] = [
 	{
 		id: "movie",
@@ -123,6 +203,9 @@ export const MEDIA_TYPES: readonly MediaTypeConfig[] = [
 		},
 		primaryLinkLabel: "LETTERBOXD",
 		genres: MOVIE_GENRES,
+		usesProviders: true,
+		defaultYearFrom: 1990,
+		fields: [],
 	},
 	{
 		id: "tv",
@@ -144,6 +227,34 @@ export const MEDIA_TYPES: readonly MediaTypeConfig[] = [
 		},
 		primaryLinkLabel: "TMDB",
 		genres: TV_GENRES,
+		usesProviders: true,
+		defaultYearFrom: 1990,
+		fields: [],
+	},
+	{
+		id: "book",
+		slug: "libros",
+		label: "Libros",
+		singular: "Libro",
+		icon: "📚",
+		available: true,
+		tagline: "Una lectura nueva cada semana, a tu medida.",
+		// Warm paper / sepia, serif titles, spine-like card edge
+		theme: {
+			dark: { accent: "#D9B382", accent2: "#B08968", accentFg: "#1A1208" },
+			light: { accent: "#8A5A2B", accent2: "#6B4423", accentFg: "#FFFFFF" },
+			cardRadius: "4px",
+			posterRatio: "2 / 3",
+			titleFont: SERIF,
+			titleTracking: "0",
+			titleTransform: "none",
+			cardEdge: "spine",
+		},
+		primaryLinkLabel: "OPEN LIBRARY",
+		genres: BOOK_GENRES,
+		usesProviders: false,
+		defaultYearFrom: 1900,
+		fields: BOOK_FIELDS,
 	},
 ];
 
@@ -255,4 +366,21 @@ export function sectionHref(
 ): string {
 	const base = `/${getMediaConfig(mediaType).slug}`;
 	return year ? `${base}?year=${year}` : base;
+}
+
+/** Default options of a media type (profile-language resolved against the choices). */
+export function defaultOptions(
+	mediaType: MediaType,
+	profileLanguage: string,
+): Record<string, OptionValue> {
+	const out: Record<string, OptionValue> = {};
+	for (const f of getMediaConfig(mediaType).fields) {
+		out[f.key] =
+			f.default === "profile-language"
+				? f.choices.some((c) => c.value === profileLanguage)
+					? profileLanguage
+					: "any"
+				: f.default;
+	}
+	return out;
 }

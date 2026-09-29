@@ -72,12 +72,12 @@ export async function createRecommendationForProfile(
 	// Dedupe by tmdb_id across every yearly library of the profile (per media type)
 	const { data: existing } = await supabase
 		.from("recommendations")
-		.select("tmdb_id")
+		.select("external_id")
 		.eq("profile_id", profile.id)
 		.eq("media_type", mediaType);
 
 	const excludeIds = (existing ?? []).map(
-		(r: { tmdb_id: number }) => r.tmdb_id,
+		(r: { external_id: string }) => r.external_id,
 	);
 
 	const library = await getOrCreateLibrary(
@@ -86,7 +86,7 @@ export async function createRecommendationForProfile(
 		getCurrentYear(),
 	);
 
-	// unique(profile_id, media_type, tmdb_id) guards against races: on a duplicate
+	// unique(profile_id, media_type, external_id) guards against races: on a duplicate
 	// (23505) exclude that title and pick another one.
 	const MAX_PICKS = 3;
 	let media: EnrichedMedia | null = null;
@@ -99,6 +99,7 @@ export async function createRecommendationForProfile(
 				yearFrom: prefs.year_from,
 				yearTo: prefs.year_to,
 				providerIds: prefs.provider_ids,
+				options: prefs.options ?? {},
 				country: profile.country,
 				language: profile.language,
 			},
@@ -112,7 +113,12 @@ export async function createRecommendationForProfile(
 				profile_id: profile.id,
 				library_id: library.id,
 				media_type: mediaType,
+				external_id: media.externalId,
 				tmdb_id: media.tmdbId,
+				creator: media.creator,
+				rating: media.rating,
+				rating_count: media.ratingCount,
+				pages: media.pages,
 				imdb_id: media.imdbId,
 				title: media.title,
 				slug: media.primaryUrl,
@@ -128,7 +134,7 @@ export async function createRecommendationForProfile(
 			.single();
 
 		if (error?.code === "23505") {
-			excludeIds.push(media.tmdbId);
+			excludeIds.push(media.externalId);
 			continue;
 		}
 		if (error || !data) {

@@ -25,20 +25,25 @@ const COPY = {
 		eyebrow: {
 			movie: "TU PELÍCULA DE ESTA SEMANA",
 			tv: "TU SERIE DE ESTA SEMANA",
+			book: "TU LIBRO DE ESTA SEMANA",
 		} satisfies NounCopy,
 		poster: (title: string) => `Póster de ${title}`,
 		primaryButton: {
 			movie: "Ver en Letterboxd",
 			tv: "Ver en TMDB",
+			book: "Ver en Open Library",
 		} satisfies NounCopy,
 		imdb: "Ver en IMDb",
 		footer: {
 			movie:
 				"Cada semana, descubrirás una nueva película recomendada según tus gustos.",
 			tv: "Cada semana, descubrirás una nueva serie recomendada según tus gustos.",
+			book: "Cada semana, descubrirás un nuevo libro recomendado según tus gustos.",
 		} satisfies NounCopy,
 		receivingFor: "Estás recibiendo este correo por tu perfil:",
 		seasons: (n: number) => `${n} temporada${n === 1 ? "" : "s"}`,
+		pages: (n: number) => `${n} pág.`,
+		by: "de",
 	},
 	en: {
 		subject: (title: string) => `Your recommendation of the week: ${title}`,
@@ -47,23 +52,28 @@ const COPY = {
 		eyebrow: {
 			movie: "YOUR MOVIE OF THE WEEK",
 			tv: "YOUR SERIES OF THE WEEK",
+			book: "YOUR BOOK OF THE WEEK",
 		} satisfies NounCopy,
 		poster: (title: string) => `Poster of ${title}`,
 		primaryButton: {
 			movie: "View on Letterboxd",
 			tv: "View on TMDB",
+			book: "View on Open Library",
 		} satisfies NounCopy,
 		imdb: "View on IMDb",
 		footer: {
 			movie: "Every week, you will discover a new movie picked for your taste.",
 			tv: "Every week, you will discover a new series picked for your taste.",
+			book: "Every week, you will discover a new book picked for your taste.",
 		} satisfies NounCopy,
 		receivingFor: "You are receiving this email for your profile:",
 		seasons: (n: number) => `${n} season${n === 1 ? "" : "s"}`,
+		pages: (n: number) => `${n} pp.`,
+		by: "by",
 	},
 } satisfies Record<Language, unknown>;
 
-const ICON: Record<MediaType, string> = { movie: "🎬", tv: "📺" };
+const ICON: Record<MediaType, string> = { movie: "🎬", tv: "📺", book: "📚" };
 
 export function getEmailSubject(
 	language: Language,
@@ -189,6 +199,17 @@ export function MediaRecommendationEmail({
 						>
 							{media.title}
 						</Heading>
+						{media.creator && (
+							<Text
+								style={{
+									fontSize: "15px",
+									color: "#444444",
+									margin: "0 0 4px",
+								}}
+							>
+								{t.by} {media.creator}
+							</Text>
+						)}
 						<Text
 							style={{
 								fontSize: "14px",
@@ -196,8 +217,12 @@ export function MediaRecommendationEmail({
 								margin: "0 0 20px",
 							}}
 						>
-							{media.releaseYear}
+							{media.releaseYear || ""}
 							{media.tmdbRating ? ` • ⭐ ${media.tmdbRating}` : ""}
+							{media.rating
+								? ` • ⭐ ${media.rating}/5${media.ratingCount ? ` (${media.ratingCount})` : ""}`
+								: ""}
+							{media.pages ? ` • ${t.pages(media.pages)}` : ""}
 							{media.seasons ? ` • ${t.seasons(media.seasons)}` : ""}
 						</Text>
 
