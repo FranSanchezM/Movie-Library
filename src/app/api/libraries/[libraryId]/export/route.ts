@@ -1,3 +1,4 @@
+import { isMediaType } from "@/config/media";
 import { getCurrentProfile, isUuid } from "@/lib/session";
 import { createUserClient } from "@/lib/supabase-server";
 import type { Library, Recommendation } from "@/types";
@@ -6,6 +7,7 @@ import { NextResponse } from "next/server";
 // Backup of one yearly library: GET /api/libraries/:id/export?format=json|csv
 
 const CSV_COLUMNS = [
+	"media_type",
 	"recommended_at",
 	"title",
 	"release_year",
@@ -14,6 +16,7 @@ const CSV_COLUMNS = [
 	"tmdb_rating",
 	"imdb_rating",
 	"rt_rating",
+	"seasons",
 	"is_seen",
 	"feedback",
 	"letterboxd_url",
@@ -31,6 +34,7 @@ function csvCell(value: unknown): string {
 function toCsv(recommendations: Recommendation[]): string {
 	const rows = recommendations.map((r) =>
 		[
+			r.media_type,
 			r.recommended_at,
 			r.title,
 			r.release_year,
@@ -39,6 +43,7 @@ function toCsv(recommendations: Recommendation[]): string {
 			r.tmdb_rating,
 			r.imdb_rating,
 			r.rt_rating,
+			r.seasons,
 			r.is_seen ?? false,
 			r.feedback,
 			r.slug,
@@ -65,7 +70,12 @@ export async function GET(
 		return NextResponse.json({ error: "Invalid library id" }, { status: 400 });
 	}
 
-	const format = new URL(request.url).searchParams.get("format") ?? "json";
+	const searchParams = new URL(request.url).searchParams;
+	const format = searchParams.get("format") ?? "json";
+	const mediaTypeParam = searchParams.get("media_type");
+	if (mediaTypeParam !== null && !isMediaType(mediaTypeParam)) {
+		return NextResponse.json({ error: "Invalid media_type" }, { status: 400 });
+	}
 	if (format !== "json" && format !== "csv") {
 		return NextResponse.json(
 			{ error: "format must be json or csv" },
@@ -86,11 +96,14 @@ export async function GET(
 		return NextResponse.json({ error: "Library not found" }, { status: 404 });
 	}
 
-	const { data, error } = await supabase
+	let query = supabase
 		.from("recommendations")
 		.select("*")
-		.eq("library_id", library.id)
-		.order("recommended_at", { ascending: true });
+		.eq("library_id", library.id);
+	if (mediaTypeParam) query = query.eq("media_type", mediaTypeParam);
+	const { data, error } = await query.order("recommended_at", {
+		ascending: true,
+	});
 
 	if (error) {
 		console.error("Error exporting library:", error);
@@ -98,7 +111,7 @@ export async function GET(
 	}
 
 	const recommendations = (data ?? []) as Recommendation[];
-	const filename = `cinerandom-library-${library.year}.${format}`;
+	const filename = `cinerandom-library-${library.year}${mediaTypeParam ? `-${mediaTypeParam}` : ""}.${format}`;
 	const headers = {
 		"Content-Disposition": `attachment; filename="${filename}"`,
 		"Cache-Control": "no-store",
@@ -113,6 +126,7 @@ export async function GET(
 	const body = {
 		exported_at: new Date().toISOString(),
 		library: { id: library.id, year: library.year },
+		media_type: mediaTypeParam ?? "all",
 		recommendations,
 	};
 	return new Response(JSON.stringify(body, null, 2), {

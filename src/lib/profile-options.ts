@@ -2,32 +2,6 @@ import type { DeliveryDay, Language } from "@/types";
 
 // Shared (client + server) option lists and constants for profile preferences.
 
-// TMDB genres with IDs
-export const GENRES = [
-	{ id: 28, label: "Acción" },
-	{ id: 12, label: "Aventura" },
-	{ id: 16, label: "Animación" },
-	{ id: 35, label: "Comedia" },
-	{ id: 80, label: "Crimen" },
-	{ id: 99, label: "Documental" },
-	{ id: 18, label: "Drama" },
-	{ id: 10751, label: "Familia" },
-	{ id: 14, label: "Fantasía" },
-	{ id: 36, label: "Historia" },
-	{ id: 27, label: "Terror" },
-	{ id: 10402, label: "Música" },
-	{ id: 9648, label: "Misterio" },
-	{ id: 10749, label: "Romance" },
-	{ id: 878, label: "Ciencia ficción" },
-	{ id: 53, label: "Suspenso" },
-	{ id: 10752, label: "Bélica" },
-	{ id: 37, label: "Western" },
-] as const;
-
-export const GENRE_LABELS: Record<number, string> = Object.fromEntries(
-	GENRES.map((g) => [g.id, g.label]),
-);
-
 export const DELIVERY_DAYS: {
 	id: DeliveryDay;
 	label: string;

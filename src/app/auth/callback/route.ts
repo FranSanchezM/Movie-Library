@@ -1,8 +1,10 @@
+import { ensureProfile } from "@/lib/profile-bootstrap";
 import { createUserClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 
-// OAuth redirect target: exchanges the code for a session, then links a
-// legacy profile with the same verified email (if any).
+// OAuth redirect target: exchanges the code for a session, then makes sure the
+// user has a profile (claiming a legacy one by verified email, or creating a
+// base one) and sends them Home.
 export async function GET(request: Request) {
 	const { searchParams, origin } = new URL(request.url);
 	const code = searchParams.get("code");
@@ -19,12 +21,10 @@ export async function GET(request: Request) {
 		return NextResponse.redirect(`${origin}/login?error=auth`);
 	}
 
-	// No-op when the user already has a profile or nothing matches.
-	const { error: claimError } = await supabase.rpc("claim_legacy_profile");
-	if (claimError) {
-		console.error("Error claiming legacy profile:", claimError);
+	const { data } = await supabase.auth.getUser();
+	if (data.user) {
+		await ensureProfile(supabase, data.user);
 	}
 
-	// "/" sends users without a profile to onboarding.
 	return NextResponse.redirect(`${origin}/`);
 }

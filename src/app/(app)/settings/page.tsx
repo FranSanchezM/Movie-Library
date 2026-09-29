@@ -1,4 +1,4 @@
-import { getCurrentProfile, getCurrentUser } from "@/lib/session";
+import { getCurrentPreferences, getCurrentProfile } from "@/lib/session";
 import { redirect } from "next/navigation";
 import SettingsForm from "./settings-form";
 
@@ -6,8 +6,13 @@ export default async function SettingsPage() {
 	const profile = await getCurrentProfile();
 
 	if (!profile) {
-		redirect((await getCurrentUser()) ? "/onboarding" : "/login");
+		redirect("/login");
 	}
 
-	return <SettingsForm profile={profile} />;
+	return (
+		<SettingsForm
+			profile={profile}
+			preferences={await getCurrentPreferences()}
+		/>
+	);
 }

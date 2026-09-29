@@ -1,33 +1,44 @@
 "use client";
 
 import { getWatchProvidersAction } from "@/app/settings-actions";
+import { type MediaType, getMediaConfig } from "@/config/media";
 import {
 	COUNTRIES,
 	DELIVERY_DAYS,
-	GENRES,
 	LANGUAGES,
 	MIN_YEAR,
 	getCurrentYear,
 } from "@/lib/profile-options";
-import type { ProfileInput } from "@/lib/profile-validation";
+import type { SettingsInput } from "@/lib/profile-validation";
 import type { WatchProvider } from "@/lib/tmdb";
 import type { DeliveryDay, Language } from "@/types";
 import { useEffect, useState } from "react";
 
-/** Client-side form state (camelCase mirror of ProfileInput). */
+/** Profile-level form state. */
 export interface ProfileFormValues {
 	name: string;
 	language: Language;
 	country: string;
-	genres: number[];
-	yearFrom: number;
-	yearTo: number;
-	providerIds: number[];
 	dayOfWeek: DeliveryDay;
 	receivesEmails: boolean;
 }
 
+/** Per-media-type preferences form state. */
+export interface MediaPrefsValues {
+	enabled: boolean;
+	genres: number[];
+	yearFrom: number;
+	yearTo: number;
+	providerIds: number[];
+}
+
+export type PrefsByType = Partial<Record<MediaType, MediaPrefsValues>>;
+
 export type ProfileFormChange = (patch: Partial<ProfileFormValues>) => void;
+export type MediaPrefsChange = (
+	mediaType: MediaType,
+	patch: Partial<MediaPrefsValues>,
+) => void;
 
 interface FieldsProps {
 	values: ProfileFormValues;
@@ -35,17 +46,38 @@ interface FieldsProps {
 	disabled?: boolean;
 }
 
-export function toProfileInput(values: ProfileFormValues): ProfileInput {
+export function defaultPrefs(enabled: boolean): MediaPrefsValues {
 	return {
-		name: values.name.trim(),
-		language: values.language,
-		country: values.country,
-		genres: values.genres,
-		year_from: values.yearFrom,
-		year_to: values.yearTo,
-		provider_ids: values.providerIds,
-		day_of_week: values.dayOfWeek,
-		receives_emails: values.receivesEmails,
+		enabled,
+		genres: [],
+		yearFrom: 1990,
+		yearTo: getCurrentYear(),
+		providerIds: [],
+	};
+}
+
+export function toSettingsInput(
+	values: ProfileFormValues,
+	prefs: PrefsByType,
+): SettingsInput {
+	return {
+		profile: {
+			name: values.name.trim(),
+			language: values.language,
+			country: values.country,
+			day_of_week: values.dayOfWeek,
+			receives_emails: values.receivesEmails,
+		},
+		preferences: (Object.entries(prefs) as [MediaType, MediaPrefsValues][]).map(
+			([media_type, p]) => ({
+				media_type,
+				enabled: p.enabled,
+				genres: p.genres,
+				year_from: p.yearFrom,
+				year_to: p.yearTo,
+				provider_ids: p.providerIds,
+			}),
+		),
 	};
 }
 
@@ -53,14 +85,16 @@ export function isIdentityValid(v: ProfileFormValues): boolean {
 	return v.name.trim().length >= 2;
 }
 
-export function isTasteValid(v: ProfileFormValues): boolean {
+/** A disabled media type is always valid; an enabled one needs genres and a sane range. */
+export function isTasteValid(p: MediaPrefsValues): boolean {
+	if (!p.enabled) return true;
 	return (
-		v.genres.length > 0 &&
-		Number.isInteger(v.yearFrom) &&
-		Number.isInteger(v.yearTo) &&
-		v.yearFrom >= MIN_YEAR &&
-		v.yearTo <= getCurrentYear() &&
-		v.yearFrom <= v.yearTo
+		p.genres.length > 0 &&
+		Number.isInteger(p.yearFrom) &&
+		Number.isInteger(p.yearTo) &&
+		p.yearFrom >= MIN_YEAR &&
+		p.yearTo <= getCurrentYear() &&
+		p.yearFrom <= p.yearTo
 	);
 }
 
@@ -106,7 +140,7 @@ export function LocaleFields({ values, onChange, disabled }: FieldsProps) {
 	return (
 		<div className="ob-stack">
 			<div className="ob-field">
-				<span className="ob-label">Idioma de las películas</span>
+				<span className="ob-label">Idioma de títulos y descripciones</span>
 				<div className="ob-genres">
 					{LANGUAGES.map((l) => (
 						<button
@@ -152,14 +186,18 @@ export function LocaleFields({ values, onChange, disabled }: FieldsProps) {
 
 // ───────── Genres, years, streaming platforms ─────────
 
-function useWatchProviders(country: string, language: Language) {
+function useWatchProviders(
+	mediaType: MediaType,
+	country: string,
+	language: Language,
+) {
 	const [providers, setProviders] = useState<WatchProvider[]>([]);
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
 		let cancelled = false;
 		setLoading(true);
-		getWatchProvidersAction(country, language)
+		getWatchProvidersAction(mediaType, country, language)
 			.then((list) => {
 				if (!cancelled) setProviders(list);
 			})
@@ -172,25 +210,46 @@ function useWatchProviders(country: string, language: Language) {
 		return () => {
 			cancelled = true;
 		};
-	}, [country, language]);
+	}, [mediaType, country, language]);
 
 	return { providers, loading };
 }
 
-export function TasteFields({ values, onChange, disabled }: FieldsProps) {
+interface TasteFieldsProps {
+	mediaType: MediaType;
+	values: MediaPrefsValues;
+	country: string;
+	language: Language;
+	onChange: MediaPrefsChange;
+	disabled?: boolean;
+}
+
+export function TasteFields({
+	mediaType,
+	values,
+	country,
+	language,
+	onChange: onPrefsChange,
+	disabled,
+}: TasteFieldsProps) {
+	const config = getMediaConfig(mediaType);
 	const { providers, loading } = useWatchProviders(
-		values.country,
-		values.language,
+		mediaType,
+		country,
+		language,
 	);
 	const { providerIds } = values;
+	const onChange = (patch: Partial<MediaPrefsValues>) =>
+		onPrefsChange(mediaType, patch);
 
 	// Drop selected platforms that do not exist in the chosen country.
 	useEffect(() => {
 		if (providers.length === 0) return;
 		const available = new Set(providers.map((p) => p.id));
 		const kept = providerIds.filter((id) => available.has(id));
-		if (kept.length !== providerIds.length) onChange({ providerIds: kept });
-	}, [providers, providerIds, onChange]);
+		if (kept.length !== providerIds.length)
+			onPrefsChange(mediaType, { providerIds: kept });
+	}, [providers, providerIds, mediaType, onPrefsChange]);
 
 	function toggleGenre(id: number) {
 		onChange({
@@ -213,7 +272,7 @@ export function TasteFields({ values, onChange, disabled }: FieldsProps) {
 			<div className="ob-field">
 				<span className="ob-label">Géneros</span>
 				<div className="ob-genres">
-					{GENRES.map((g) => (
+					{config.genres.map((g) => (
 						<button
 							type="button"
 							key={g.id}
@@ -290,8 +349,8 @@ export function TasteFields({ values, onChange, disabled }: FieldsProps) {
 					</div>
 				)}
 				<p className="ob-hint">
-					Solo te recomendaremos películas disponibles en tus plataformas. Si no
-					elegís ninguna, no se filtra por plataforma.
+					Solo te recomendaremos {config.label.toLowerCase()} disponibles en tus
+					plataformas. Si no elegís ninguna, no se filtra por plataforma.
 				</p>
 			</div>
 		</div>
@@ -320,6 +379,39 @@ export function DeliveryFields({ values, onChange, disabled }: FieldsProps) {
 			<p className="ob-hint">
 				Recibís una recomendación por semana, los sábados o los domingos.
 			</p>
+		</div>
+	);
+}
+
+// ───────── One media type block (settings) ─────────
+
+interface MediaSectionProps extends Omit<TasteFieldsProps, "disabled"> {
+	disabled?: boolean;
+}
+
+export function MediaSection(props: MediaSectionProps) {
+	const { mediaType, values, onChange, disabled } = props;
+	const config = getMediaConfig(mediaType);
+	const id = `pf-enable-${mediaType}`;
+
+	return (
+		<div className="ob-stack">
+			<h2 className="ob-section-title">
+				{config.icon} {config.label}
+			</h2>
+			<div className="ob-check-row">
+				<input
+					type="checkbox"
+					id={id}
+					checked={values.enabled}
+					disabled={disabled}
+					onChange={(e) => onChange(mediaType, { enabled: e.target.checked })}
+				/>
+				<label htmlFor={id}>
+					Recibir recomendaciones de {config.label.toLowerCase()}
+				</label>
+			</div>
+			{values.enabled && <TasteFields {...props} />}
 		</div>
 	);
 }

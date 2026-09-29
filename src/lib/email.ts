@@ -1,11 +1,11 @@
 import { render } from "@react-email/render";
 import nodemailer from "nodemailer";
 import {
-	MovieRecommendationEmail,
+	MediaRecommendationEmail,
 	getEmailSubject,
-} from "../app/emails/movies-recommendation";
+} from "../app/emails/media-recommendation";
 import type { Profile } from "../types";
-import type { EnrichedMovie } from "./tmdb";
+import type { EnrichedMedia } from "./media";
 
 // Usamos el servicio de Gmail directamente
 const transporter = nodemailer.createTransport({
@@ -16,14 +16,14 @@ const transporter = nodemailer.createTransport({
 	},
 });
 
-export async function sendMovieEmail(
+export async function sendMediaEmail(
 	profile: Pick<Profile, "email" | "name" | "language">,
-	movie: EnrichedMovie,
+	media: EnrichedMedia,
 ) {
 	const html = await render(
-		MovieRecommendationEmail({
+		MediaRecommendationEmail({
 			profileName: profile.name,
-			movie,
+			media,
 			language: profile.language,
 		}),
 	);
@@ -37,12 +37,10 @@ export async function sendMovieEmail(
 		await transporter.sendMail({
 			from: `"CineRandom" <${process.env.EMAIL_USER}>`,
 			to: profile.email,
-			subject: getEmailSubject(profile.language, movie.title),
+			subject: getEmailSubject(profile.language, media),
 			html,
 		});
-		console.log(
-			`✅ Email enviado a ${profile.email} para la película: ${movie.title}`,
-		);
+		console.log(`✅ Email enviado a ${profile.email}: ${media.title}`);
 	} catch (error) {
 		console.error("❌ Error enviando email con Nodemailer:", error);
 	}

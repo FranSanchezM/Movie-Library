@@ -1,21 +1,37 @@
+import {
+	MEDIA_TYPES,
+	type MediaType,
+	getMediaConfig,
+	isMediaType,
+} from "@/config/media";
 import type { DeliveryDay, Language } from "@/types";
-import { GENRES, MIN_YEAR, getCurrentYear } from "./profile-options";
+import { MIN_YEAR, getCurrentYear } from "./profile-options";
 
-/** Everything the user can edit on a profile. */
+/** Profile-level settings (identity comes from the auth session). */
 export interface ProfileInput {
 	name: string;
 	language: Language;
 	country: string;
-	genres: number[];
-	year_from: number;
-	year_to: number;
-	provider_ids: number[];
 	day_of_week: DeliveryDay;
 	receives_emails: boolean;
 }
 
+/** Preferences for one media type. */
+export interface MediaPreferencesInput {
+	media_type: MediaType;
+	enabled: boolean;
+	genres: number[];
+	year_from: number;
+	year_to: number;
+	provider_ids: number[];
+}
+
+export interface SettingsInput {
+	profile: ProfileInput;
+	preferences: MediaPreferencesInput[];
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const GENRE_IDS = new Set<number>(GENRES.map((g) => g.id));
 const MAX_PROVIDERS = 100;
 const MAX_PROVIDER_ID = 1e7;
 
@@ -39,38 +55,47 @@ function isPositiveInt(n: unknown): n is number {
 	return typeof n === "number" && Number.isInteger(n) && n > 0;
 }
 
-/**
- * Validates untrusted input from a client (the email comes from the auth session). Throws an Error with a
- * user-facing (Spanish) message when something is invalid.
- */
-export function parseProfileInput(raw: unknown): ProfileInput {
-	if (typeof raw !== "object" || raw === null) {
-		throw new Error("Datos inválidos");
-	}
-	const d = raw as Record<string, unknown>;
-
+function parseProfile(d: Record<string, unknown>): ProfileInput {
 	const name = typeof d.name === "string" ? d.name.trim() : "";
 	if (name.length < 2 || name.length > 80) {
 		throw new Error("El nombre debe tener entre 2 y 80 caracteres");
 	}
-
-	if (!isValidLanguage(d.language)) {
-		throw new Error("Idioma inválido");
+	if (!isValidLanguage(d.language)) throw new Error("Idioma inválido");
+	if (!isValidCountry(d.country)) throw new Error("País inválido");
+	if (d.day_of_week !== 0 && d.day_of_week !== 6) {
+		throw new Error("El día de envío debe ser sábado o domingo");
 	}
 
-	if (!isValidCountry(d.country)) {
-		throw new Error("País inválido");
-	}
+	return {
+		name,
+		language: d.language,
+		country: d.country,
+		day_of_week: d.day_of_week,
+		receives_emails: d.receives_emails !== false,
+	};
+}
+
+export function parsePreferences(
+	d: Record<string, unknown>,
+): MediaPreferencesInput {
+	if (!isMediaType(d.media_type)) throw new Error("Tipo de contenido inválido");
+	const config = getMediaConfig(d.media_type);
+	const validGenres = new Set<number>(config.genres.map((g) => g.id));
+	const enabled = d.enabled === true;
 
 	if (
 		!Array.isArray(d.genres) ||
-		d.genres.length === 0 ||
-		d.genres.length > GENRE_IDS.size * 2 ||
-		!d.genres.every((g) => isPositiveInt(g) && GENRE_IDS.has(g))
+		d.genres.length > validGenres.size * 2 ||
+		!d.genres.every((g) => isPositiveInt(g) && validGenres.has(g))
 	) {
-		throw new Error("Elegí al menos un género válido");
+		throw new Error(`Géneros inválidos para ${config.label.toLowerCase()}`);
 	}
 	const genres = [...new Set(d.genres as number[])];
+	if (enabled && genres.length === 0) {
+		throw new Error(
+			`Elegí al menos un género de ${config.label.toLowerCase()}`,
+		);
+	}
 
 	const maxYear = getCurrentYear();
 	if (
@@ -93,21 +118,50 @@ export function parseProfileInput(raw: unknown): ProfileInput {
 	) {
 		throw new Error("Plataformas inválidas");
 	}
-	const provider_ids = [...new Set(providerRaw as number[])];
-
-	if (d.day_of_week !== 0 && d.day_of_week !== 6) {
-		throw new Error("El día de envío debe ser sábado o domingo");
-	}
 
 	return {
-		name,
-		language: d.language,
-		country: d.country,
+		media_type: d.media_type,
+		enabled,
 		genres,
 		year_from: d.year_from as number,
 		year_to: d.year_to as number,
-		provider_ids,
-		day_of_week: d.day_of_week,
-		receives_emails: d.receives_emails !== false,
+		provider_ids: [...new Set(providerRaw as number[])],
+	};
+}
+
+/**
+ * Validates untrusted settings from a client. Throws an Error with a
+ * user-facing (Spanish) message when something is invalid.
+ */
+export function parseSettingsInput(raw: unknown): SettingsInput {
+	if (typeof raw !== "object" || raw === null) {
+		throw new Error("Datos inválidos");
+	}
+	const d = raw as Record<string, unknown>;
+	if (typeof d.profile !== "object" || d.profile === null) {
+		throw new Error("Datos inválidos");
+	}
+	if (
+		!Array.isArray(d.preferences) ||
+		d.preferences.length === 0 ||
+		d.preferences.length > MEDIA_TYPES.length
+	) {
+		throw new Error("Datos inválidos");
+	}
+
+	const preferences = d.preferences.map((p) => {
+		if (typeof p !== "object" || p === null) throw new Error("Datos inválidos");
+		return parsePreferences(p as Record<string, unknown>);
+	});
+
+	if (
+		new Set(preferences.map((p) => p.media_type)).size !== preferences.length
+	) {
+		throw new Error("Datos inválidos");
+	}
+
+	return {
+		profile: parseProfile(d.profile as Record<string, unknown>),
+		preferences,
 	};
 }

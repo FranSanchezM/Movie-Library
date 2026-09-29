@@ -12,6 +12,7 @@ export function ProfileFormStyles() {
 				font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
 				color: #F5F0E8;
 			}
+			.ob-embedded { min-height: auto; padding: 0; background: transparent; justify-content: flex-start; }
 			.ob-card {
 				width: 100%;
 				max-width: 520px;
@@ -33,7 +34,7 @@ export function ProfileFormStyles() {
 				font-family: var(--font-bebas-neue), 'Bebas Neue', cursive;
 				font-size: 1.6rem;
 				letter-spacing: 0.1em;
-				color: #D4A853;
+				color: var(--m-accent, #D4A853);
 				line-height: 1;
 			}
 			.ob-progress {
@@ -47,7 +48,7 @@ export function ProfileFormStyles() {
 				background: #222;
 				transition: background 0.3s ease;
 			}
-			.ob-progress-bar.active { background: #D4A853; }
+			.ob-progress-bar.active { background: var(--m-accent, #D4A853); }
 			.ob-step-title {
 				font-family: var(--font-bebas-neue), 'Bebas Neue', cursive;
 				font-size: 2rem;
@@ -98,7 +99,7 @@ export function ProfileFormStyles() {
 				width: 100%;
 				box-sizing: border-box;
 			}
-			.ob-input:focus { border-color: #D4A853; }
+			.ob-input:focus { border-color: var(--m-accent, #D4A853); }
 			.ob-input::placeholder { color: #444; }
 			select.ob-input { cursor: pointer; }
 			.ob-genres {
@@ -120,9 +121,9 @@ export function ProfileFormStyles() {
 			}
 			.ob-genre-btn:hover { border-color: #555; color: #F5F0E8; }
 			.ob-genre-btn.selected {
-				border-color: #D4A853;
-				background: rgba(212, 168, 83, 0.1);
-				color: #D4A853;
+				border-color: var(--m-accent, #D4A853);
+				background: var(--m-soft, rgba(212, 168, 83, 0.1));
+				color: var(--m-accent, #D4A853);
 			}
 			.ob-provider-btn {
 				display: inline-flex;
@@ -159,7 +160,7 @@ export function ProfileFormStyles() {
 				cursor: pointer;
 				width: 16px;
 				height: 16px;
-				accent-color: #D4A853;
+				accent-color: var(--m-accent, #D4A853);
 			}
 			.ob-check-row label {
 				font-size: 0.85rem;
@@ -197,14 +198,14 @@ export function ProfileFormStyles() {
 				padding: 0.65rem 1.4rem;
 				border-radius: 8px;
 				border: none;
-				background: #D4A853;
-				color: #080808;
+				background: var(--m-accent, #D4A853);
+				color: var(--m-accent-fg, #080808);
 				cursor: pointer;
 				letter-spacing: 0.04em;
 				transition: background 0.16s ease, transform 0.12s ease;
 			}
 			.ob-btn-primary:hover:not(:disabled) {
-				background: #e4bc6a;
+				filter: brightness(1.1);
 				transform: translateY(-1px);
 			}
 			.ob-btn-primary:disabled {
@@ -242,7 +243,7 @@ export function ProfileFormStyles() {
 				font-family: var(--font-bebas-neue), 'Bebas Neue', cursive;
 				font-size: 1.3rem;
 				letter-spacing: 0.08em;
-				color: #D4A853;
+				color: var(--m-accent, #D4A853);
 				margin: 0;
 			}
 			@media (max-width: 500px) {

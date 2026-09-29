@@ -1,4 +1,7 @@
 import type { Icons } from "@/components/icons";
+import type { MediaType } from "@/config/media";
+
+export type { MediaType };
 
 interface NavItem {
 	title: string;
@@ -23,17 +26,25 @@ export interface Profile {
 	language: Language;
 	/** ISO 3166-1 alpha-2, uppercase. */
 	country: string;
-	genres: number[];
-	year_from: number;
-	year_to: number;
-	/** TMDB watch provider ids the user subscribes to. Empty = no filter. */
-	provider_ids: number[];
 	day_of_week: DeliveryDay;
 	receives_emails: boolean;
 	created_at: string;
 }
 
-/** One library per profile and calendar year. */
+/** Recommendation preferences of a profile for one media type. */
+export interface ProfilePreferences {
+	profile_id: string;
+	media_type: MediaType;
+	enabled: boolean;
+	/** Genre ids of that media type (TMDB movie and TV ids differ). */
+	genres: number[];
+	year_from: number;
+	year_to: number;
+	/** TMDB watch provider ids the user subscribes to. Empty = no filter. */
+	provider_ids: number[];
+}
+
+/** One library per profile and calendar year (holds every media type). */
 export interface Library {
 	id: string;
 	profile_id: string;
@@ -45,6 +56,7 @@ export interface Recommendation {
 	id: string;
 	profile_id: string;
 	library_id: string;
+	media_type: MediaType;
 	tmdb_id: number;
 	imdb_id: string | null;
 	title: string;
@@ -55,6 +67,8 @@ export interface Recommendation {
 	tmdb_rating: number | null;
 	imdb_rating: string | null;
 	rt_rating: string | null;
+	/** Number of seasons (series only). */
+	seasons: number | null;
 	is_seen: boolean | null;
 	feedback: "liked" | "disliked" | null;
 	recommended_at: string;

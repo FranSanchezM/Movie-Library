@@ -1,18 +1,24 @@
 "use client";
 
+import {
+	deleteRecommendationAction,
+	updateRecommendationFeedback,
+} from "@/app/recommendation-actions";
+import { getMediaConfig } from "@/config/media";
 import type { Recommendation } from "@/types";
 import Image from "next/image";
 import { useState } from "react";
-import { updateRecommendationFeedback, deleteRecommendationAction } from "@/app/recommendation-actions";
 
 interface Props {
 	recommendation: Recommendation;
 }
 
-export function MovieCard({ recommendation }: Props) {
+export function MediaCard({ recommendation }: Props) {
 	const [imgError, setImgError] = useState(false);
 	const [isSeen, setIsSeen] = useState(recommendation.is_seen ?? false);
-	const [feedback, setFeedback] = useState<"liked" | "disliked" | null>(recommendation.feedback ?? null);
+	const [feedback, setFeedback] = useState<"liked" | "disliked" | null>(
+		recommendation.feedback ?? null,
+	);
 	const [isDeleted, setIsDeleted] = useState(false);
 
 	const {
@@ -26,7 +32,11 @@ export function MovieCard({ recommendation }: Props) {
 		description,
 		slug,
 		imdb_id,
+		seasons,
+		media_type,
 	} = recommendation;
+
+	const config = getMediaConfig(media_type ?? "movie");
 
 	const imdbUrl = imdb_id ? `https://www.imdb.com/title/${imdb_id}/` : null;
 
@@ -35,7 +45,9 @@ export function MovieCard({ recommendation }: Props) {
 		e.preventDefault();
 		const newVal = !isSeen;
 		setIsSeen(newVal);
-		updateRecommendationFeedback(id, { is_seen: newVal }).catch(() => setIsSeen(isSeen));
+		updateRecommendationFeedback(id, { is_seen: newVal }).catch(() =>
+			setIsSeen(isSeen),
+		);
 	}
 
 	function handleFeedback(e: React.MouseEvent, val: "liked" | "disliked") {
@@ -43,7 +55,9 @@ export function MovieCard({ recommendation }: Props) {
 		e.preventDefault();
 		const newVal = feedback === val ? null : val;
 		setFeedback(newVal);
-		updateRecommendationFeedback(id, { feedback: newVal }).catch(() => setFeedback(feedback));
+		updateRecommendationFeedback(id, { feedback: newVal }).catch(() =>
+			setFeedback(feedback),
+		);
 	}
 
 	function handleDelete(e: React.MouseEvent) {
@@ -57,8 +71,10 @@ export function MovieCard({ recommendation }: Props) {
 		"movie-card",
 		feedback === "liked" ? "state-liked" : "",
 		feedback === "disliked" ? "state-disliked" : "",
-		isSeen ? "state-seen" : ""
-	].filter(Boolean).join(" ");
+		isSeen ? "state-seen" : "",
+	]
+		.filter(Boolean)
+		.join(" ");
 
 	if (isDeleted) return null;
 
@@ -67,20 +83,20 @@ export function MovieCard({ recommendation }: Props) {
 			<style>{`
 				.movie-card {
 					position: relative;
-					border-radius: 12px;
+					border-radius: var(--m-radius, 12px);
 					overflow: hidden;
 					background: #111;
 					border: 1px solid #1e1e1e;
 					cursor: pointer;
 					transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-					aspect-ratio: 2/3;
+					aspect-ratio: var(--m-ratio, 2 / 3);
 					display: flex;
 					flex-direction: column;
 				}
 				.movie-card:hover {
 					transform: translateY(-4px);
-					border-color: #D4A853;
-					box-shadow: 0 8px 32px rgba(212, 168, 83, 0.18);
+					border-color: var(--m-accent, #D4A853);
+					box-shadow: 0 8px 32px var(--m-glow, rgba(212, 168, 83, 0.18));
 				}
 				.movie-card:hover .movie-card-overlay {
 					opacity: 1;
@@ -133,7 +149,8 @@ export function MovieCard({ recommendation }: Props) {
 					display: none;
 				}
 				.movie-card-title {
-					font-family: var(--font-bebas-neue), 'Bebas Neue', cursive;
+					font-family: var(--m-title-font, var(--font-bebas-neue), 'Bebas Neue', cursive);
+					text-transform: var(--m-title-transform, none);
 					font-size: 1.25rem;
 					line-height: 1.1;
 					color: #F5F0E8;
@@ -146,7 +163,7 @@ export function MovieCard({ recommendation }: Props) {
 					margin: 0;
 				}
 				.movie-card-overlay-title {
-					font-family: var(--font-bebas-neue), 'Bebas Neue', cursive;
+					font-family: var(--m-title-font, var(--font-bebas-neue), 'Bebas Neue', cursive);
 					font-size: 1.4rem;
 					letter-spacing: 0.05em;
 					color: #F5F0E8;
@@ -164,8 +181,8 @@ export function MovieCard({ recommendation }: Props) {
 					padding: 0.2rem 0.45rem;
 					border-radius: 4px;
 					border: 1px solid #333;
-					color: #D4A853;
-					background: rgba(212, 168, 83, 0.08);
+					color: var(--m-accent, #D4A853);
+					background: var(--m-soft, rgba(212, 168, 83, 0.08));
 					letter-spacing: 0.03em;
 				}
 				.movie-card-description {
@@ -186,17 +203,17 @@ export function MovieCard({ recommendation }: Props) {
 				.movie-card-link {
 					font-size: 0.7rem;
 					font-weight: 600;
-					color: #D4A853;
+					color: var(--m-accent, #D4A853);
 					text-decoration: none;
 					padding: 0.25rem 0.6rem;
-					border: 1px solid rgba(212, 168, 83, 0.35);
+					border: 1px solid var(--m-border, rgba(212, 168, 83, 0.35));
 					border-radius: 4px;
 					transition: background 0.15s ease, border-color 0.15s ease;
 					letter-spacing: 0.04em;
 				}
 				.movie-card-link:hover {
-					background: rgba(212, 168, 83, 0.15);
-					border-color: #D4A853;
+					background: var(--m-soft, rgba(212, 168, 83, 0.15));
+					border-color: var(--m-accent, #D4A853);
 				}
 				.mc-action-btns {
 					display: flex;
@@ -253,8 +270,8 @@ export function MovieCard({ recommendation }: Props) {
 				.mc-delete-btn:hover { background: #d00000; border-color: #ff4d4d; }
 			`}</style>
 			<div className={cardClass}>
-				<button 
-					className="mc-delete-btn" 
+				<button
+					className="mc-delete-btn"
 					onClick={handleDelete}
 					title="Borrar recomendación"
 				>
@@ -272,7 +289,7 @@ export function MovieCard({ recommendation }: Props) {
 						sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
 					/>
 				) : (
-					<div className="movie-card-poster-placeholder">🎬</div>
+					<div className="movie-card-poster-placeholder">{config.icon}</div>
 				)}
 
 				{/* Static footer visible on idle */}
@@ -299,29 +316,34 @@ export function MovieCard({ recommendation }: Props) {
 						{rt_rating && (
 							<span className="movie-card-rating-badge">🍅 RT {rt_rating}</span>
 						)}
+						{seasons ? (
+							<span className="movie-card-rating-badge">
+								📺 {seasons} {seasons === 1 ? "temporada" : "temporadas"}
+							</span>
+						) : null}
 					</div>
 
 					<div className="mc-action-btns">
-						<button 
+						<button
 							type="button"
-							className={`mc-action-btn ${isSeen ? 'active-seen' : ''}`}
+							className={`mc-action-btn ${isSeen ? "active-seen" : ""}`}
 							onClick={handleSeen}
 							title={isSeen ? "Marcada como vista" : "Marcar como vista"}
 						>
 							👁️
 						</button>
-						<button 
+						<button
 							type="button"
-							className={`mc-action-btn ${feedback === 'liked' ? 'active-like' : ''}`}
-							onClick={(e) => handleFeedback(e, 'liked')}
+							className={`mc-action-btn ${feedback === "liked" ? "active-like" : ""}`}
+							onClick={(e) => handleFeedback(e, "liked")}
 							title="Me gustó"
 						>
 							👍
 						</button>
-						<button 
+						<button
 							type="button"
-							className={`mc-action-btn ${feedback === 'disliked' ? 'active-dislike' : ''}`}
-							onClick={(e) => handleFeedback(e, 'disliked')}
+							className={`mc-action-btn ${feedback === "disliked" ? "active-dislike" : ""}`}
+							onClick={(e) => handleFeedback(e, "disliked")}
 							title="No me gustó"
 						>
 							👎
@@ -341,7 +363,7 @@ export function MovieCard({ recommendation }: Props) {
 								className="movie-card-link"
 								onClick={(e) => e.stopPropagation()}
 							>
-								LETTERBOXD
+								{config.primaryLinkLabel}
 							</a>
 						)}
 						{imdbUrl && (

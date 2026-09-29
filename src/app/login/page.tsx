@@ -7,11 +7,12 @@ export default async function LoginPage({
 }: {
 	searchParams: Promise<{ error?: string }>;
 }) {
-	if (await getCurrentUser()) {
+	const { error } = await searchParams;
+
+	// A session without a profile lands here with ?error: do not loop back.
+	if (!error && (await getCurrentUser())) {
 		redirect("/");
 	}
-
-	const { error } = await searchParams;
 
 	return (
 		<>
@@ -103,9 +104,7 @@ export default async function LoginPage({
 							<span className="login-logo-text">CineRandom</span>
 						</div>
 						<h1 className="login-title">Iniciá sesión</h1>
-						<p className="login-subtitle">
-							Entrá con tu cuenta de Google para ver tu perfil o crear uno.
-						</p>
+						<p className="login-subtitle">Entra con tu cuenta de Google.</p>
 					</div>
 
 					{error && (

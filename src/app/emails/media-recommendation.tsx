@@ -1,4 +1,5 @@
-import type { EnrichedMovie } from "@/lib/tmdb";
+import type { MediaType } from "@/config/media";
+import type { EnrichedMedia } from "@/lib/media";
 import type { Language } from "@/types";
 import {
 	Body,
@@ -14,49 +15,76 @@ import {
 	Text,
 } from "@react-email/components";
 
+type NounCopy = Record<MediaType, string>;
+
 const COPY = {
 	es: {
-		subject: (title: string) => `🎬 Tu recomendación de la semana: ${title}`,
+		subject: (title: string) => `Tu recomendación de la semana: ${title}`,
 		welcome: "🎬 Bienvenido a CineRandom",
 		tagline: "Tu viaje cinematográfico empieza ahora",
-		eyebrow: "TU PELÍCULA DE ESTA SEMANA",
+		eyebrow: {
+			movie: "TU PELÍCULA DE ESTA SEMANA",
+			tv: "TU SERIE DE ESTA SEMANA",
+		} satisfies NounCopy,
 		poster: (title: string) => `Póster de ${title}`,
-		letterboxd: "Ver en Letterboxd",
+		primaryButton: {
+			movie: "Ver en Letterboxd",
+			tv: "Ver en TMDB",
+		} satisfies NounCopy,
 		imdb: "Ver en IMDb",
-		footer:
-			"Cada semana, descubrirás una nueva película recomendada según tus gustos.",
+		footer: {
+			movie:
+				"Cada semana, descubrirás una nueva película recomendada según tus gustos.",
+			tv: "Cada semana, descubrirás una nueva serie recomendada según tus gustos.",
+		} satisfies NounCopy,
 		receivingFor: "Estás recibiendo este correo por tu perfil:",
+		seasons: (n: number) => `${n} temporada${n === 1 ? "" : "s"}`,
 	},
 	en: {
-		subject: (title: string) => `🎬 Your recommendation of the week: ${title}`,
+		subject: (title: string) => `Your recommendation of the week: ${title}`,
 		welcome: "🎬 Welcome to CineRandom",
 		tagline: "Your cinematic journey starts now",
-		eyebrow: "YOUR MOVIE OF THE WEEK",
+		eyebrow: {
+			movie: "YOUR MOVIE OF THE WEEK",
+			tv: "YOUR SERIES OF THE WEEK",
+		} satisfies NounCopy,
 		poster: (title: string) => `Poster of ${title}`,
-		letterboxd: "View on Letterboxd",
+		primaryButton: {
+			movie: "View on Letterboxd",
+			tv: "View on TMDB",
+		} satisfies NounCopy,
 		imdb: "View on IMDb",
-		footer: "Every week, you will discover a new movie picked for your taste.",
+		footer: {
+			movie: "Every week, you will discover a new movie picked for your taste.",
+			tv: "Every week, you will discover a new series picked for your taste.",
+		} satisfies NounCopy,
 		receivingFor: "You are receiving this email for your profile:",
+		seasons: (n: number) => `${n} season${n === 1 ? "" : "s"}`,
 	},
 } satisfies Record<Language, unknown>;
 
-export function getEmailSubject(language: Language, title: string): string {
-	return COPY[language].subject(title);
+const ICON: Record<MediaType, string> = { movie: "🎬", tv: "📺" };
+
+export function getEmailSubject(
+	language: Language,
+	media: EnrichedMedia,
+): string {
+	return `${ICON[media.mediaType]} ${COPY[language].subject(media.title)}`;
 }
 
-interface MovieRecommendationEmailProps {
+interface MediaRecommendationEmailProps {
 	profileName: string;
-	movie: EnrichedMovie;
+	media: EnrichedMedia;
 	language: Language;
 }
 
-export function MovieRecommendationEmail({
+export function MediaRecommendationEmail({
 	profileName,
-	movie,
+	media,
 	language,
-}: MovieRecommendationEmailProps) {
+}: MediaRecommendationEmailProps) {
 	const t = COPY[language];
-	const subject = t.subject(movie.title);
+	const subject = getEmailSubject(language, media);
 
 	return (
 		<Html lang={language}>
@@ -131,13 +159,13 @@ export function MovieRecommendationEmail({
 								margin: "0 0 20px",
 							}}
 						>
-							{t.eyebrow}
+							{t.eyebrow[media.mediaType]}
 						</Text>
 
-						{movie.posterUrl && (
+						{media.posterUrl && (
 							<Img
-								src={movie.posterUrl}
-								alt={t.poster(movie.title)}
+								src={media.posterUrl}
+								alt={t.poster(media.title)}
 								width="240"
 								style={{
 									width: "240px",
@@ -159,7 +187,7 @@ export function MovieRecommendationEmail({
 								lineHeight: "1.2",
 							}}
 						>
-							{movie.title}
+							{media.title}
 						</Heading>
 						<Text
 							style={{
@@ -168,11 +196,12 @@ export function MovieRecommendationEmail({
 								margin: "0 0 20px",
 							}}
 						>
-							{movie.releaseYear}
-							{movie.tmdbRating ? ` • ⭐ ${movie.tmdbRating}` : ""}
+							{media.releaseYear}
+							{media.tmdbRating ? ` • ⭐ ${media.tmdbRating}` : ""}
+							{media.seasons ? ` • ${t.seasons(media.seasons)}` : ""}
 						</Text>
 
-						{movie.description && (
+						{media.description && (
 							<Text
 								style={{
 									fontSize: "15px",
@@ -182,12 +211,12 @@ export function MovieRecommendationEmail({
 									maxWidth: "460px",
 								}}
 							>
-								{movie.description}
+								{media.description}
 							</Text>
 						)}
 
 						<Button
-							href={movie.letterboxdUrl}
+							href={media.primaryUrl}
 							style={{
 								backgroundColor: "#0077b6", // Un tono azul similar al del ejemplo
 								color: "#ffffff",
@@ -200,13 +229,13 @@ export function MovieRecommendationEmail({
 								display: "inline-block",
 							}}
 						>
-							{t.letterboxd}
+							{t.primaryButton[media.mediaType]}
 						</Button>
 
-						{movie.imdbUrl && (
+						{media.imdbUrl && (
 							<div style={{ marginTop: "16px" }}>
 								<a
-									href={movie.imdbUrl}
+									href={media.imdbUrl}
 									style={{
 										fontSize: "13px",
 										color: "#666666",
@@ -229,7 +258,7 @@ export function MovieRecommendationEmail({
 								lineHeight: "1.5",
 							}}
 						>
-							{t.footer}
+							{t.footer[media.mediaType]}
 							<br />
 							{t.receivingFor} <strong>{profileName}</strong>.
 						</Text>

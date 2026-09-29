@@ -1,6 +1,7 @@
-import type { Profile } from "@/types";
+import type { Profile, ProfilePreferences } from "@/types";
 import type { User } from "@supabase/supabase-js";
 import { cache } from "react";
+import { ensureProfile } from "./profile-bootstrap";
 import { type UserClient, createUserClient } from "./supabase-server";
 
 const UUID_RE =
@@ -19,7 +20,10 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 	return data.user ?? null;
 });
 
-/** The signed-in user's profile (one per user), or null. */
+/**
+ * The signed-in user's profile (one per user), or null without a session.
+ * Normally created by the auth callback; ensureProfile is a safety net.
+ */
 export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
 	const user = await getCurrentUser();
 	if (!user) return null;
@@ -31,8 +35,25 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
 		.eq("user_id", user.id)
 		.maybeSingle();
 
-	return (data as Profile | null) ?? null;
+	if (data) return data as Profile;
+	return ensureProfile(supabase, user);
 });
+
+/** Preference rows of the signed-in profile (one per media type at most). */
+export const getCurrentPreferences = cache(
+	async (): Promise<ProfilePreferences[]> => {
+		const profile = await getCurrentProfile();
+		if (!profile) return [];
+
+		const supabase = await createUserClient();
+		const { data } = await supabase
+			.from("profile_preferences")
+			.select("*")
+			.eq("profile_id", profile.id);
+
+		return (data ?? []) as ProfilePreferences[];
+	},
+);
 
 /**
  * For server actions and route handlers: the user-scoped client and the

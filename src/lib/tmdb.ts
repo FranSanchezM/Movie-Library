@@ -1,3 +1,4 @@
+import type { MediaType } from "@/config/media";
 import type { Language } from "@/types";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
@@ -8,18 +9,23 @@ const TMDB_LANGUAGE: Record<Language, string> = {
 	en: "en-US",
 };
 
-export interface TMDBMovie {
+/** TMDB kinds are the media types backed by TMDB. */
+export type TmdbKind = Extract<MediaType, "movie" | "tv">;
+
+/** Normalized discover result (movies: title/release_date, series: name/first_air_date). */
+export interface TmdbItem {
 	id: number;
 	title: string;
 	overview: string;
 	poster_path: string | null;
-	release_date: string;
+	date: string;
 	vote_average: number;
-	genre_ids: number[];
 }
 
-export interface TMDBMovieDetail extends TMDBMovie {
-	imdb_id: string | null;
+export interface TmdbDetail {
+	imdbId: string | null;
+	/** Series only */
+	seasons: number | null;
 }
 
 export interface WatchProvider {
@@ -28,23 +34,7 @@ export interface WatchProvider {
 	logoPath: string | null;
 }
 
-export interface EnrichedMovie {
-	tmdbId: number;
-	imdbId: string | null;
-	title: string;
-	slug: string;
-	posterUrl: string | null;
-	description: string;
-	releaseYear: number;
-	tmdbRating: number;
-	imdbRating: string | null;
-	rtRating: string | null;
-	imdbUrl: string | null;
-	letterboxdUrl: string;
-	letterboxdFallbackUrl: string;
-}
-
-export interface MovieFilters {
+export interface TmdbFilters {
 	genres: number[];
 	yearFrom: number;
 	yearTo: number;
@@ -55,18 +45,25 @@ export interface MovieFilters {
 	language: Language;
 }
 
+// Discover date filter per kind
+const DATE_PARAM: Record<TmdbKind, string> = {
+	movie: "primary_release_date",
+	tv: "first_air_date",
+};
+
 async function discoverPage(
-	filters: MovieFilters,
+	kind: TmdbKind,
+	filters: TmdbFilters,
 	page: number,
-): Promise<{ movies: TMDBMovie[]; totalPages: number } | null> {
+): Promise<{ items: TmdbItem[]; totalPages: number } | null> {
 	const params = new URLSearchParams({
 		api_key: TMDB_API_KEY,
 		language: TMDB_LANGUAGE[filters.language],
 		with_genres: filters.genres.join("|"),
-		"primary_release_date.gte": `${filters.yearFrom}-01-01`,
-		"primary_release_date.lte": `${filters.yearTo}-12-31`,
+		[`${DATE_PARAM[kind]}.gte`]: `${filters.yearFrom}-01-01`,
+		[`${DATE_PARAM[kind]}.lte`]: `${filters.yearTo}-12-31`,
 		sort_by: "vote_count.desc",
-		"vote_count.gte": "100", // only movies with enough votes
+		"vote_count.gte": "100", // only titles with enough votes
 		page: String(page),
 	});
 
@@ -76,7 +73,7 @@ async function discoverPage(
 		params.set("with_watch_monetization_types", "flatrate");
 	}
 
-	const res = await fetch(`${TMDB_BASE}/discover/movie?${params}`, {
+	const res = await fetch(`${TMDB_BASE}/discover/${kind}?${params}`, {
 		next: { revalidate: 3600 },
 	});
 
@@ -86,30 +83,38 @@ async function discoverPage(
 	}
 
 	const data = await res.json();
-	return {
-		movies: data.results ?? [],
-		totalPages: data.total_pages ?? 1,
-	};
+	const items: TmdbItem[] = (data.results ?? []).map(
+		(r: Record<string, unknown>) => ({
+			id: r.id as number,
+			title: (r.title ?? r.name ?? "") as string,
+			overview: (r.overview ?? "") as string,
+			poster_path: (r.poster_path ?? null) as string | null,
+			date: (r.release_date ?? r.first_air_date ?? "") as string,
+			vote_average: (r.vote_average ?? 0) as number,
+		}),
+	);
+	return { items, totalPages: data.total_pages ?? 1 };
 }
 
 // TMDB discover serves at most 500 pages
 const MAX_DISCOVER_PAGE = 500;
 const MAX_PAGE_ATTEMPTS = 6;
 
-// Fetch a random movie from TMDB based on the profile preferences
-export async function fetchRandomMovie(
-	filters: MovieFilters,
+// Fetch a random title of the given kind from TMDB based on the preferences
+export async function fetchRandomItem(
+	kind: TmdbKind,
+	filters: TmdbFilters,
 	excludeTmdbIds: number[] = [],
-): Promise<TMDBMovie | null> {
+): Promise<TmdbItem | null> {
 	const exclude = new Set(excludeTmdbIds);
 
 	// Page 1 tells us how many pages the filters produce
-	const first = await discoverPage(filters, 1);
+	const first = await discoverPage(kind, filters, 1);
 	if (!first) return null;
 
 	const maxPage = Math.min(Math.max(first.totalPages, 1), MAX_DISCOVER_PAGE);
-	const pick = (movies: TMDBMovie[]) => {
-		const available = movies.filter((m) => !exclude.has(m.id));
+	const pick = (items: TmdbItem[]) => {
+		const available = items.filter((m) => !exclude.has(m.id));
 		return available.length > 0
 			? available[Math.floor(Math.random() * available.length)]
 			: null;
@@ -124,40 +129,48 @@ export async function fetchRandomMovie(
 		tried.add(page);
 
 		if (page === 1) {
-			const movie = pick(first.movies);
-			if (movie) return movie;
+			const item = pick(first.items);
+			if (item) return item;
 			continue;
 		}
 
-		const result = await discoverPage(filters, page);
+		const result = await discoverPage(kind, filters, page);
 		if (!result) return null;
-		const movie = pick(result.movies);
-		if (movie) return movie;
+		const item = pick(result.items);
+		if (item) return item;
 	}
 
 	// Last resort: the first page (already fetched) if not tried
-	return tried.has(1) ? null : pick(first.movies);
+	return tried.has(1) ? null : pick(first.items);
 }
 
-// Fetch full movie detail to get imdb_id
-export async function fetchMovieDetail(
+// Full detail: IMDb id (external_ids for series) and season count
+export async function fetchDetail(
+	kind: TmdbKind,
 	tmdbId: number,
 	language: Language,
-): Promise<TMDBMovieDetail | null> {
+): Promise<TmdbDetail | null> {
 	const params = new URLSearchParams({
 		api_key: TMDB_API_KEY,
 		language: TMDB_LANGUAGE[language],
 	});
-	const res = await fetch(`${TMDB_BASE}/movie/${tmdbId}?${params}`, {
+	if (kind === "tv") params.set("append_to_response", "external_ids");
+
+	const res = await fetch(`${TMDB_BASE}/${kind}/${tmdbId}?${params}`, {
 		next: { revalidate: 86400 },
 	});
-
 	if (!res.ok) return null;
-	return res.json();
+
+	const data = await res.json();
+	return {
+		imdbId: (kind === "tv" ? data.external_ids?.imdb_id : data.imdb_id) || null,
+		seasons: kind === "tv" ? (data.number_of_seasons ?? null) : null,
+	};
 }
 
 // Streaming providers available in a country, most relevant first
 export async function fetchWatchProviders(
+	kind: TmdbKind,
 	country: string,
 	language: Language,
 ): Promise<WatchProvider[]> {
@@ -168,7 +181,7 @@ export async function fetchWatchProviders(
 	});
 
 	try {
-		const res = await fetch(`${TMDB_BASE}/watch/providers/movie?${params}`, {
+		const res = await fetch(`${TMDB_BASE}/watch/providers/${kind}?${params}`, {
 			next: { revalidate: 86400 },
 		});
 		if (!res.ok) return [];
@@ -213,7 +226,7 @@ export async function fetchDescription(
 
 		if (res.ok) {
 			const data = await res.json();
-			// Make sure it's actually a film article
+			// Skip disambiguation pages
 			if (data.extract && data.type !== "disambiguation") {
 				return data.extract;
 			}
@@ -238,4 +251,8 @@ export function buildLetterboxdUrls(
 		main: `https://letterboxd.com/tmdb/${tmdbId}/`,
 		fallback: `https://letterboxd.com/search/${encodeURIComponent(title)}/`,
 	};
+}
+
+export function buildTmdbUrl(kind: TmdbKind, tmdbId: number): string {
+	return `https://www.themoviedb.org/${kind}/${tmdbId}`;
 }
