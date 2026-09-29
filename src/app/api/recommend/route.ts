@@ -1,93 +1,36 @@
-import { sendMovieEmail } from "@/lib/email";
-import { getMovieForLibrary } from "@/lib/movies";
-import { createClient } from "@/lib/supabase";
+import { createRecommendationForProfile } from "@/lib/recommendations";
+import { getCurrentProfile } from "@/lib/session";
+import { createUserClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 
-export async function POST(request: Request) {
-	let body: { libraryId?: string };
+// Generates a recommendation for the signed-in user's profile.
+export async function POST() {
+	const profile = await getCurrentProfile();
 
-	try {
-		body = await request.json();
-	} catch {
-		return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+	if (!profile) {
+		return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 	}
 
-	const { libraryId } = body;
-
-	if (!libraryId) {
-		return NextResponse.json(
-			{ error: "libraryId is required" },
-			{ status: 400 },
-		);
-	}
-
-	const supabase = createClient();
-
-	// Fetch the library
-	const { data: library, error: libraryError } = await supabase
-		.from("libraries")
-		.select("*")
-		.eq("id", libraryId)
-		.single();
-
-	if (libraryError || !library) {
-		return NextResponse.json({ error: "Library not found" }, { status: 404 });
-	}
-
-	// Get already recommended tmdb_ids to avoid repeats
-	const { data: existing } = await supabase
-		.from("recommendations")
-		.select("tmdb_id")
-		.eq("library_id", libraryId);
-
-	const excludeIds = (existing ?? []).map(
-		(r: { tmdb_id: number }) => r.tmdb_id,
+	const result = await createRecommendationForProfile(
+		await createUserClient(),
+		profile.id,
 	);
 
-	// Fetch a matching movie
-	const movie = await getMovieForLibrary(
-		library.genres,
-		library.year_from,
-		library.year_to,
-		excludeIds,
-	);
-
-	if (!movie) {
-		return NextResponse.json(
-			{ error: "No movie found for this library" },
-			{ status: 500 },
-		);
-	}
-
-	// Save to Supabase
-	const { data: saved, error: insertError } = await supabase
-		.from("recommendations")
-		.insert({
-			library_id: libraryId,
-			tmdb_id: movie.tmdbId,
-			imdb_id: movie.imdbId,
-			title: movie.title,
-			slug: movie.letterboxdUrl,
-			poster_path: movie.posterUrl,
-			description: movie.description,
-			release_year: movie.releaseYear,
-			tmdb_rating: movie.tmdbRating,
-			imdb_rating: movie.imdbRating,
-			rt_rating: movie.rtRating,
-		})
-		.select()
-		.single();
-
-	if (insertError) {
-		console.error("Error saving recommendation:", insertError);
+	if (!result.ok) {
+		if (result.reason === "profile_not_found") {
+			return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+		}
+		if (result.reason === "no_movie") {
+			return NextResponse.json(
+				{ error: "No hay películas nuevas con tus filtros." },
+				{ status: 404 },
+			);
+		}
 		return NextResponse.json(
 			{ error: "Failed to save recommendation" },
 			{ status: 500 },
 		);
 	}
 
-	// Send email to user
-	await sendMovieEmail(library.email, library.name, library.frequency, movie);
-
-	return NextResponse.json(saved);
+	return NextResponse.json(result.recommendation);
 }

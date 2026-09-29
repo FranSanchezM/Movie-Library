@@ -1,85 +1,92 @@
 import { MovieCard } from "@/components/movies/movies-card";
-import { createClient } from "@/lib/supabase";
+import {
+	GENRE_LABELS,
+	deliveryDayLabel,
+	getCurrentYear,
+} from "@/lib/profile-options";
+import { createRecommendationForProfile } from "@/lib/recommendations";
+import { getCurrentProfile, getCurrentUser } from "@/lib/session";
+import { createUserClient } from "@/lib/supabase-server";
 import type { Library, Recommendation } from "@/types";
-import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import HomeActions from "./home-actions";
 
-async function getLibrary(): Promise<Library | null> {
-	const cookieStore = await cookies();
-	const libraryId = cookieStore.get("cinerandom_library_id")?.value;
+type UserClient = Awaited<ReturnType<typeof createUserClient>>;
 
-	if (!libraryId) {
-		return null;
-	}
-
-	const supabase = createClient();
+async function getLibraries(
+	supabase: UserClient,
+	profileId: string,
+): Promise<Library[]> {
 	const { data } = await supabase
 		.from("libraries")
 		.select("*")
-		.eq("id", libraryId)
-		.maybeSingle();
-
-	return data ?? null;
+		.eq("profile_id", profileId)
+		.order("year", { ascending: false });
+	return (data ?? []) as Library[];
 }
 
-async function getRecommendations(libraryId: string): Promise<Recommendation[]> {
-	const supabase = createClient();
+async function getRecommendations(
+	supabase: UserClient,
+	libraryId: string,
+): Promise<Recommendation[]> {
 	const { data } = await supabase
 		.from("recommendations")
 		.select("*")
 		.eq("library_id", libraryId)
 		.order("recommended_at", { ascending: false });
-	return data ?? [];
+	return (data ?? []) as Recommendation[];
 }
 
-// TMDB genre id → display label
-const GENRE_LABELS: Record<number, string> = {
-	28: "Acción",
-	12: "Aventura",
-	16: "Animación",
-	35: "Comedia",
-	80: "Crimen",
-	99: "Documental",
-	18: "Drama",
-	10751: "Familia",
-	14: "Fantasía",
-	36: "Historia",
-	27: "Terror",
-	10402: "Música",
-	9648: "Misterio",
-	10749: "Romance",
-	878: "Ciencia ficción",
-	10770: "TV Movie",
-	53: "Suspenso",
-	10752: "Bélica",
-	37: "Western",
-};
+async function countRecommendations(
+	supabase: UserClient,
+	profileId: string,
+): Promise<number> {
+	const { count } = await supabase
+		.from("recommendations")
+		.select("id", { count: "exact", head: true })
+		.eq("profile_id", profileId);
+	return count ?? 0;
+}
 
-export default async function HomePage() {
-	const library = await getLibrary();
+export default async function HomePage({
+	searchParams,
+}: {
+	searchParams: Promise<{ year?: string }>;
+}) {
+	const profile = await getCurrentProfile();
 
-	if (!library) {
-		redirect("/onboarding");
+	if (!profile) {
+		redirect((await getCurrentUser()) ? "/onboarding" : "/login");
 	}
 
-	let recommendations = await getRecommendations(library.id);
+	const supabase = await createUserClient();
+	const currentYear = getCurrentYear();
 
-	if (recommendations.length === 0) {
-		// No film yet? Trigger it on-the-fly
+	if ((await countRecommendations(supabase, profile.id)) === 0) {
+		// No film yet? Generate it on-the-fly
 		try {
-			// We use the absolute internal URL for server-side fetch
-			await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/recommend`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ libraryId: library.id }),
-			});
-			// Refetch after generation
-			recommendations = await getRecommendations(library.id);
+			await createRecommendationForProfile(supabase, profile.id);
 		} catch (err) {
 			console.error("Error auto-generating first recommendation:", err);
 		}
 	}
+
+	const libraries = await getLibraries(supabase, profile.id);
+
+	// Year selector: every existing year plus the current one (created lazily)
+	const years = [
+		...new Set([currentYear, ...libraries.map((l) => l.year)]),
+	].sort((a, b) => b - a);
+	const { year: yearParam } = await searchParams;
+	const requestedYear = Number(yearParam);
+	const selectedYear = years.includes(requestedYear)
+		? requestedYear
+		: currentYear;
+	const library = libraries.find((l) => l.year === selectedYear) ?? null;
+	const recommendations = library
+		? await getRecommendations(supabase, library.id)
+		: [];
 
 	return (
 		<>
@@ -165,12 +172,57 @@ export default async function HomePage() {
 					margin: 0 auto;
 					padding: 2rem 1.5rem 4rem;
 				}
+				.cr-toolbar {
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					gap: 1rem;
+					flex-wrap: wrap;
+					margin-bottom: 1.25rem;
+				}
+				.cr-years {
+					display: flex;
+					gap: 0.4rem;
+					flex-wrap: wrap;
+				}
+				.cr-year-link {
+					font-size: 0.78rem;
+					font-weight: 600;
+					color: #888;
+					text-decoration: none;
+					border: 1px solid #2a2a2a;
+					border-radius: 20px;
+					padding: 0.3rem 0.8rem;
+					transition: all 0.16s ease;
+				}
+				.cr-year-link:hover { border-color: #555; color: #F5F0E8; }
+				.cr-year-link.active {
+					color: #D4A853;
+					border-color: #D4A853;
+					background: rgba(212, 168, 83, 0.1);
+				}
+				.cr-export {
+					display: flex;
+					align-items: center;
+					gap: 0.5rem;
+					font-size: 0.72rem;
+					color: #666;
+				}
+				.cr-export a {
+					color: #D4A853;
+					text-decoration: none;
+					font-weight: 600;
+					border: 1px solid rgba(212, 168, 83, 0.3);
+					border-radius: 6px;
+					padding: 0.25rem 0.6rem;
+				}
+				.cr-export a:hover { background: rgba(212, 168, 83, 0.12); }
 				.cr-section-title {
 					font-family: var(--font-bebas-neue), 'Bebas Neue', cursive;
 					font-size: 1.1rem;
 					letter-spacing: 0.12em;
 					color: #555;
-					margin: 0 0 1.25rem;
+					margin: 0;
 					text-transform: uppercase;
 				}
 				.cr-grid {
@@ -230,12 +282,12 @@ export default async function HomePage() {
 								<span className="cr-logo-emoji">🎬</span>
 								<span className="cr-logo-text">CineRandom</span>
 							</div>
-							<h1 className="cr-library-name">{library.name}</h1>
+							<h1 className="cr-library-name">{profile.name}</h1>
 							<div className="cr-genres">
 								<span className="cr-frequency-badge">
-									{library.frequency === "daily" ? "📅 Diaria" : "📆 Semanal"}
+									📆 {deliveryDayLabel(profile.day_of_week, true)}
 								</span>
-								{library.genres.map((id) => (
+								{profile.genres.map((id) => (
 									<span key={id} className="cr-genre-tag">
 										{GENRE_LABELS[id] ?? `Género ${id}`}
 									</span>
@@ -243,30 +295,64 @@ export default async function HomePage() {
 							</div>
 						</div>
 
-						<HomeActions
-							libraryId={library.id}
-							libraryEmail={library.email}
-							receivesEmails={library.receives_emails}
-						/>
+						<HomeActions receivesEmails={profile.receives_emails} />
 					</div>
 				</header>
 
 				<main className="cr-main">
-					<p className="cr-section-title">
+					<div className="cr-toolbar">
+						<nav className="cr-years" aria-label="Bibliotecas por año">
+							{years.map((y) => (
+								<Link
+									key={y}
+									href={y === currentYear ? "/" : `/?year=${y}`}
+									className={`cr-year-link${y === selectedYear ? " active" : ""}`}
+								>
+									Biblioteca {y}
+								</Link>
+							))}
+						</nav>
+
+						{library && recommendations.length > 0 && (
+							<div className="cr-export">
+								<span>Respaldar {selectedYear}:</span>
+								<a
+									href={`/api/libraries/${library.id}/export?format=json`}
+									download
+								>
+									JSON
+								</a>
+								<a
+									href={`/api/libraries/${library.id}/export?format=csv`}
+									download
+								>
+									CSV
+								</a>
+							</div>
+						)}
+					</div>
+
+					<p className="cr-section-title" style={{ marginBottom: "1.25rem" }}>
 						{recommendations.length > 0
-							? `${recommendations.length} película${recommendations.length !== 1 ? "s" : ""} recomendada${recommendations.length !== 1 ? "s" : ""}`
-							: "Tu biblioteca"}
+							? `${recommendations.length} película${recommendations.length !== 1 ? "s" : ""} recomendada${recommendations.length !== 1 ? "s" : ""} en ${selectedYear}`
+							: `Biblioteca ${selectedYear}`}
 					</p>
 
 					<div className="cr-grid">
 						{recommendations.length === 0 ? (
 							<div className="cr-empty">
 								<span className="cr-empty-icon">🍿</span>
-								<h2 className="cr-empty-title">Tu primera recomendación está en camino</h2>
-								<p className="cr-empty-text">
-									Pronto recibirás tu primera película por email. ¿No podés
-									esperar? Pedí una recomendación ahora con el botón de arriba.
-								</p>
+								<h2 className="cr-empty-title">
+									{selectedYear === currentYear
+										? "Tu próxima recomendación está en camino"
+										: `No hay recomendaciones en ${selectedYear}`}
+								</h2>
+								{selectedYear === currentYear && (
+									<p className="cr-empty-text">
+										Pronto recibirás tu próxima película. ¿No querés esperar?
+										Usá el botón «Nueva recomendación».
+									</p>
+								)}
 							</div>
 						) : (
 							recommendations.map((rec) => (

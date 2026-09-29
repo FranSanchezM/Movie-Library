@@ -1,40 +1,55 @@
 "use server";
 
-import { createClient } from "@/lib/supabase";
+import {
+	isValidCountry,
+	isValidLanguage,
+	parseProfileInput,
+} from "@/lib/profile-validation";
+import { getCurrentUser, requireProfile } from "@/lib/session";
+import { type WatchProvider, fetchWatchProviders } from "@/lib/tmdb";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 
-export async function updateLibrarySettings(
-	id: string,
-	data: { receives_emails?: boolean },
-) {
-	const supabase = createClient();
-	const { error } = await supabase.from("libraries").update(data).eq("id", id);
+/** Updates the signed-in user's profile (validated server-side). */
+export async function updateProfileAction(input: unknown) {
+	const { supabase, profile } = await requireProfile();
+	const data = parseProfileInput(input);
+
+	const { error } = await supabase
+		.from("profiles")
+		.update(data)
+		.eq("id", profile.id);
 
 	if (error) {
-		console.error("Error updating library:", error);
+		console.error("Error updating profile:", error);
+		throw new Error("No se pudo guardar la configuración");
+	}
+
+	revalidatePath("/");
+	revalidatePath("/settings");
+}
+
+export async function setReceivesEmailsAction(receivesEmails: boolean) {
+	const { supabase, profile } = await requireProfile();
+
+	const { error } = await supabase
+		.from("profiles")
+		.update({ receives_emails: receivesEmails === true })
+		.eq("id", profile.id);
+
+	if (error) {
+		console.error("Error updating profile:", error);
 		throw new Error("No se pudo actualizar la configuración");
 	}
 
 	revalidatePath("/");
 }
 
-export async function deleteLibraryAction(id: string) {
-	const supabase = createClient();
-	const { error } = await supabase.from("libraries").delete().eq("id", id);
-
-	if (error) {
-		console.error("Error deleting library:", error);
-		throw new Error("No se pudo borrar la biblioteca");
-	}
-
-	const cookieStore = await cookies();
-	const activeId = cookieStore.get("cinerandom_library_id")?.value;
-	
-	if (activeId === id) {
-		cookieStore.delete("cinerandom_library_id");
-	}
-
-	return { success: true };
+/** Streaming providers available in a country (TMDB watch providers). */
+export async function getWatchProvidersAction(
+	country: string,
+	language: string,
+): Promise<WatchProvider[]> {
+	if (!isValidCountry(country) || !isValidLanguage(language)) return [];
+	if (!(await getCurrentUser())) return [];
+	return fetchWatchProviders(country, language);
 }

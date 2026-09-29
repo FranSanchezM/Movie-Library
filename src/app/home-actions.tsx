@@ -3,15 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { logoutAction } from "./auth-actions";
-import { updateLibrarySettings, deleteLibraryAction } from "./settings-actions";
+import { setReceivesEmailsAction } from "./settings-actions";
 
 interface Props {
-	libraryId: string;
-	libraryEmail: string;
 	receivesEmails: boolean;
 }
 
-export default function HomeActions({ libraryId, libraryEmail, receivesEmails }: Props) {
+export default function HomeActions({ receivesEmails }: Props) {
 	const router = useRouter();
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -21,15 +19,10 @@ export default function HomeActions({ libraryId, libraryEmail, receivesEmails }:
 		const nextState = !emailOn;
 		setEmailOn(nextState);
 		try {
-			await updateLibrarySettings(libraryId, { receives_emails: nextState });
+			await setReceivesEmailsAction(nextState);
 		} catch {
 			setEmailOn(emailOn); // rollback
 		}
-	}
-
-	async function handleSwitchLibrary() {
-		setLoading(true);
-		router.push(`/login?email=${encodeURIComponent(libraryEmail)}`);
 	}
 
 	async function handleRecommend() {
@@ -38,17 +31,17 @@ export default function HomeActions({ libraryId, libraryEmail, receivesEmails }:
 		try {
 			const res = await fetch("/api/recommend", {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ libraryId }),
 			});
 			if (!res.ok) {
 				const data = await res.json();
-				setError(data.error ?? "Error al obtener recomendación");
+				setError(data.error ?? "No se pudo obtener");
 			} else {
-				router.refresh();
+				// Land on the current year, where new recommendations are stored
+					router.push("/");
+					router.refresh();
 			}
 		} catch {
-			setError("Error de conexión. Intentá de nuevo.");
+			setError("Error de conexión.");
 		} finally {
 			setLoading(false);
 		}
@@ -145,7 +138,7 @@ export default function HomeActions({ libraryId, libraryEmail, receivesEmails }:
 						disabled={loading}
 						className="cr-recommend-btn"
 					>
-						{loading ? "Buscando..." : "🍿 Pedir recomendación ahora"}
+						{loading ? "Buscando…" : "🍿 Nueva recomendación"}
 					</button>
 					{error && <p className="cr-actions-error">{error}</p>}
 				</div>
@@ -160,23 +153,22 @@ export default function HomeActions({ libraryId, libraryEmail, receivesEmails }:
 					{emailOn ? "🔔" : "🔕"}
 				</button>
 
-				<button 
-					type="button" 
-					onClick={handleSwitchLibrary} 
-					className="cr-logout-btn"
-					disabled={loading}
-					title="Ver todas mis bibliotecas"
-					style={{ color: "#D4A853", borderColor: "rgba(212,168,83,0.3)" }}
-				>
-					Mis Bibliotecas
-				</button>
+					<button
+						type="button"
+						onClick={() => router.push("/settings")}
+						className="cr-logout-btn"
+						disabled={loading}
+						title="Editar mi perfil y mis preferencias"
+					>
+						Configuración
+					</button>
 
 				<button 
 					type="button" 
 					onClick={() => logoutAction()} 
 					className="cr-logout-btn"
 					disabled={loading}
-					title="Cambiar de cuenta o salir"
+					title="Cerrar sesión"
 				>
 					Salir
 				</button>

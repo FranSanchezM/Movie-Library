@@ -1,37 +1,37 @@
 "use server";
 
-import { createClient } from "@/lib/supabase";
-import { cookies } from "next/headers";
+import { createUserClient } from "@/lib/supabase-server";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-export async function getLibrariesByEmail(email: string) {
-	const supabase = createClient();
-	const { data } = await supabase
-		.from("libraries")
-		.select("id, name, frequency")
-		.eq("email", email.trim())
-		.order("created_at", { ascending: false });
+async function getOrigin(): Promise<string> {
+	const h = await headers();
+	const origin = h.get("origin");
+	if (origin) return origin;
+	const host = h.get("x-forwarded-host") ?? h.get("host");
+	const proto = h.get("x-forwarded-proto") ?? "http";
+	return `${proto}://${host}`;
+}
 
-	if (!data || data.length === 0) {
-		throw new Error("No encontramos ninguna biblioteca con ese email.");
+export async function signInWithGoogleAction() {
+	const supabase = await createUserClient();
+	const origin = await getOrigin();
+
+	const { data, error } = await supabase.auth.signInWithOAuth({
+		provider: "google",
+		options: { redirectTo: `${origin}/auth/callback` },
+	});
+
+	if (error || !data.url) {
+		console.error("Google sign-in error:", error);
+		redirect("/login?error=auth");
 	}
 
-	return data;
+	redirect(data.url);
 }
-
 
 export async function logoutAction() {
-	const cookieStore = await cookies();
-	cookieStore.delete("cinerandom_library_id");
-	redirect("/onboarding");
-}
-
-export async function setLibraryCookie(id: string) {
-	const cookieStore = await cookies();
-	cookieStore.set("cinerandom_library_id", id, {
-		httpOnly: true,
-		secure: process.env.NODE_ENV === "production",
-		maxAge: 60 * 60 * 24 * 365, // 1 year
-		path: "/",
-	});
+	const supabase = await createUserClient();
+	await supabase.auth.signOut();
+	redirect("/login");
 }

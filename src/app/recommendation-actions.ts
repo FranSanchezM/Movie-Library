@@ -1,17 +1,31 @@
 "use server";
 
-import { createClient } from "@/lib/supabase";
+import { isUuid, requireProfile } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 
 export async function updateRecommendationFeedback(
 	id: string,
 	data: { is_seen?: boolean; feedback?: "liked" | "disliked" | null },
 ) {
-	const supabase = createClient();
+	const { supabase, profile } = await requireProfile();
+	if (!isUuid(id)) throw new Error("Solicitud inválida");
+
+	const update: { is_seen?: boolean; feedback?: "liked" | "disliked" | null } =
+		{};
+	if (typeof data.is_seen === "boolean") update.is_seen = data.is_seen;
+	if (
+		data.feedback === null ||
+		data.feedback === "liked" ||
+		data.feedback === "disliked"
+	) {
+		update.feedback = data.feedback;
+	}
+
 	const { error } = await supabase
 		.from("recommendations")
-		.update(data)
-		.eq("id", id);
+		.update(update)
+		.eq("id", id)
+		.eq("profile_id", profile.id);
 
 	if (error) {
 		console.error("Error actualizando recomendación:", error);
@@ -22,8 +36,14 @@ export async function updateRecommendationFeedback(
 }
 
 export async function deleteRecommendationAction(id: string) {
-	const supabase = createClient();
-	const { error } = await supabase.from("recommendations").delete().eq("id", id);
+	const { supabase, profile } = await requireProfile();
+	if (!isUuid(id)) throw new Error("Solicitud inválida");
+
+	const { error } = await supabase
+		.from("recommendations")
+		.delete()
+		.eq("id", id)
+		.eq("profile_id", profile.id);
 
 	if (error) {
 		console.error("Error borrando recomendación:", error);

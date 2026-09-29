@@ -1,100 +1,13 @@
 import { Inngest } from "inngest";
-import { sendMovieEmail } from "./email";
-import { getMovieForLibrary } from "./movies";
+import { createRecommendationForProfile } from "./recommendations";
+// The service-role client is only for this background job.
 import { createClient } from "./supabase";
 
 export const inngest = new Inngest({ id: "movie-library" });
-// Helper: process a single library — fetch movie, save, and send email
-async function processLibrary(libraryId: string) {
-	const supabase = createClient();
-
-	// Get library details
-	const { data: library, error } = await supabase
-		.from("libraries")
-		.select("*")
-		.eq("id", libraryId)
-		.single();
-
-	if (error || !library) {
-		console.error(`Library ${libraryId} not found`);
-		return;
-	}
-
-	// Get already recommended tmdb_ids to avoid repeats
-	const { data: existing } = await supabase
-		.from("recommendations")
-		.select("tmdb_id")
-		.eq("library_id", libraryId);
-
-	const excludeIds = (existing ?? []).map(
-		(r: { tmdb_id: number }) => r.tmdb_id,
-	);
-
-	// Fetch a movie matching this library's filters
-	const movie = await getMovieForLibrary(
-		library.genres,
-		library.year_from,
-		library.year_to,
-		excludeIds,
-	);
-
-	if (!movie) {
-		console.error(`No movie found for library ${libraryId}`);
-		return;
-	}
-
-	// Save recommendation to Supabase
-	const { error: insertError } = await supabase.from("recommendations").insert({
-		library_id: libraryId,
-		tmdb_id: movie.tmdbId,
-		imdb_id: movie.imdbId,
-		title: movie.title,
-		slug: movie.letterboxdUrl,
-		poster_path: movie.posterUrl,
-		description: movie.description,
-		release_year: movie.releaseYear,
-		tmdb_rating: movie.tmdbRating,
-		imdb_rating: movie.imdbRating,
-		rt_rating: movie.rtRating,
-	});
-
-	if (insertError) {
-		console.error("Error saving recommendation:", insertError);
-		return;
-	}
-
-	// Send email via shared helper if opted in
-	if (library.receives_emails !== false) {
-		await sendMovieEmail(library.email, library.name, library.frequency, movie);
-	}
-}
 
 // ─────────────────────────────────────────────
-// CRON: Daily — runs every day at 9am UTC
-// ─────────────────────────────────────────────
-export const dailyRecommendation = inngest.createFunction(
-	{
-		id: "daily-recommendation",
-		triggers: [{ cron: "0 9 * * *" }],
-	},
-	async ({ step }) => {
-		const supabase = createClient();
-
-		const { data: libraries } = await supabase
-			.from("libraries")
-			.select("id")
-			.eq("frequency", "daily");
-
-		for (const lib of libraries ?? []) {
-			await step.run(`process-library-${lib.id}`, () => processLibrary(lib.id));
-		}
-
-		return { processed: libraries?.length ?? 0 };
-	},
-);
-
-// ─────────────────────────────────────────────
-// CRON: Weekly — runs every day at 9am UTC but filters by user's day
+// CRON: Weekly — runs every day at 9am UTC but only processes the profiles
+// whose delivery day (Saturday = 6 or Sunday = 0) is today (UTC)
 // ─────────────────────────────────────────────
 export const weeklyRecommendation = inngest.createFunction(
 	{
@@ -102,19 +15,33 @@ export const weeklyRecommendation = inngest.createFunction(
 		triggers: [{ cron: "0 9 * * *" }],
 	},
 	async ({ step }) => {
-		const supabase = createClient();
-		const today = new Date().getDay();
+		// Memoized by Inngest, so re-invocations see the same set of profiles
+		const profiles = await step.run("load-profiles", async () => {
+			const supabase = createClient();
+			const today = new Date().getUTCDay();
 
-		const { data: libraries } = await supabase
-			.from("libraries")
-			.select("id")
-			.eq("frequency", "weekly")
-			.eq("day_of_week", today);
+			const { data } = await supabase
+				.from("profiles")
+				.select("id")
+				.eq("day_of_week", today);
 
-		for (const lib of libraries ?? []) {
-			await step.run(`process-library-${lib.id}`, () => processLibrary(lib.id));
+			return (data ?? []) as { id: string }[];
+		});
+
+		for (const profile of profiles) {
+			await step.run(`process-profile-${profile.id}`, async () => {
+				const result = await createRecommendationForProfile(
+					createClient(),
+					profile.id,
+				);
+				if (!result.ok) {
+					console.error(
+						`Recommendation failed for profile ${profile.id}: ${result.reason}`,
+					);
+				}
+			});
 		}
 
-		return { processed: libraries?.length ?? 0 };
+		return { processed: profiles.length };
 	},
 );

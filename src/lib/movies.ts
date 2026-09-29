@@ -1,3 +1,4 @@
+import type { Profile } from "@/types";
 import { fetchRatings } from "./omdb";
 import {
 	type EnrichedMovie,
@@ -9,23 +10,33 @@ import {
 
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 
-export async function getMovieForLibrary(
-	genres: number[],
-	yearFrom: number,
-	yearTo: number,
+type PreferenceFields = Pick<
+	Profile,
+	"genres" | "year_from" | "year_to" | "provider_ids" | "country" | "language"
+>;
+
+export async function getMovieForProfile(
+	profile: PreferenceFields,
 	excludeTmdbIds: number[] = [],
 ): Promise<EnrichedMovie | null> {
-	// 1. Get a random movie from TMDB matching filters
+	const { language } = profile;
+
+	// 1. Get a random movie from TMDB matching filters (localized title/overview)
 	const movie = await fetchRandomMovie(
-		genres,
-		yearFrom,
-		yearTo,
+		{
+			genres: profile.genres,
+			yearFrom: profile.year_from,
+			yearTo: profile.year_to,
+			providerIds: profile.provider_ids,
+			country: profile.country,
+			language,
+		},
 		excludeTmdbIds,
 	);
 	if (!movie) return null;
 
 	// 2. Fetch full detail to get imdb_id
-	const detail = await fetchMovieDetail(movie.id);
+	const detail = await fetchMovieDetail(movie.id, language);
 	const imdbId = detail?.imdb_id ?? null;
 
 	// 3. Fetch OMDb ratings if we have an IMDB id
@@ -33,12 +44,16 @@ export async function getMovieForLibrary(
 		? await fetchRatings(imdbId)
 		: { imdbRating: null, rtRating: null };
 
-	// 4. Fetch Wikipedia description, fallback to TMDB overview
-	const description = await fetchDescription(movie.title, movie.overview);
+	// 4. Fetch Wikipedia description (es/en), fallback to TMDB overview
+	const description = await fetchDescription(
+		movie.title,
+		movie.overview,
+		language,
+	);
 
 	// 5. Build Letterboxd URLs
 	const { main: letterboxdUrl, fallback: letterboxdFallbackUrl } =
-		buildLetterboxdUrls(movie.title);
+		buildLetterboxdUrls(movie.id, movie.title);
 
 	const releaseYear = movie.release_date
 		? Number.parseInt(movie.release_date.slice(0, 4))

@@ -1,5 +1,12 @@
+import type { Language } from "@/types";
+
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const TMDB_API_KEY = process.env.TMDB_API_KEY!;
+
+const TMDB_LANGUAGE: Record<Language, string> = {
+	es: "es-ES",
+	en: "en-US",
+};
 
 export interface TMDBMovie {
 	id: number;
@@ -13,6 +20,12 @@ export interface TMDBMovie {
 
 export interface TMDBMovieDetail extends TMDBMovie {
 	imdb_id: string | null;
+}
+
+export interface WatchProvider {
+	id: number;
+	name: string;
+	logoPath: string | null;
 }
 
 export interface EnrichedMovie {
@@ -31,25 +44,37 @@ export interface EnrichedMovie {
 	letterboxdFallbackUrl: string;
 }
 
-// Fetch a random movie from TMDB based on user filters
-export async function fetchRandomMovie(
-	genres: number[],
-	yearFrom: number,
-	yearTo: number,
-	excludeTmdbIds: number[] = [],
-): Promise<TMDBMovie | null> {
-	// Get a random page between 1 and 5 for variety
-	const randomPage = Math.floor(Math.random() * 5) + 1;
+export interface MovieFilters {
+	genres: number[];
+	yearFrom: number;
+	yearTo: number;
+	/** TMDB watch provider ids. Empty = no availability filter. */
+	providerIds: number[];
+	/** ISO 3166-1 alpha-2, used as watch_region. */
+	country: string;
+	language: Language;
+}
 
+async function discoverPage(
+	filters: MovieFilters,
+	page: number,
+): Promise<{ movies: TMDBMovie[]; totalPages: number } | null> {
 	const params = new URLSearchParams({
 		api_key: TMDB_API_KEY,
-		with_genres: genres.join("|"),
-		"primary_release_date.gte": `${yearFrom}-01-01`,
-		"primary_release_date.lte": `${yearTo}-12-31`,
+		language: TMDB_LANGUAGE[filters.language],
+		with_genres: filters.genres.join("|"),
+		"primary_release_date.gte": `${filters.yearFrom}-01-01`,
+		"primary_release_date.lte": `${filters.yearTo}-12-31`,
 		sort_by: "vote_count.desc",
 		"vote_count.gte": "100", // only movies with enough votes
-		page: String(randomPage),
+		page: String(page),
 	});
+
+	if (filters.providerIds.length > 0) {
+		params.set("with_watch_providers", filters.providerIds.join("|"));
+		params.set("watch_region", filters.country);
+		params.set("with_watch_monetization_types", "flatrate");
+	}
 
 	const res = await fetch(`${TMDB_BASE}/discover/movie?${params}`, {
 		next: { revalidate: 3600 },
@@ -61,39 +86,128 @@ export async function fetchRandomMovie(
 	}
 
 	const data = await res.json();
-	const movies: TMDBMovie[] = data.results ?? [];
+	return {
+		movies: data.results ?? [],
+		totalPages: data.total_pages ?? 1,
+	};
+}
 
-	// Filter out already recommended movies
-	const available = movies.filter((m) => !excludeTmdbIds.includes(m.id));
+// TMDB discover serves at most 500 pages
+const MAX_DISCOVER_PAGE = 500;
+const MAX_PAGE_ATTEMPTS = 6;
 
-	if (available.length === 0) return null;
+// Fetch a random movie from TMDB based on the profile preferences
+export async function fetchRandomMovie(
+	filters: MovieFilters,
+	excludeTmdbIds: number[] = [],
+): Promise<TMDBMovie | null> {
+	const exclude = new Set(excludeTmdbIds);
 
-	// Pick a random one from the results
-	return available[Math.floor(Math.random() * available.length)];
+	// Page 1 tells us how many pages the filters produce
+	const first = await discoverPage(filters, 1);
+	if (!first) return null;
+
+	const maxPage = Math.min(Math.max(first.totalPages, 1), MAX_DISCOVER_PAGE);
+	const pick = (movies: TMDBMovie[]) => {
+		const available = movies.filter((m) => !exclude.has(m.id));
+		return available.length > 0
+			? available[Math.floor(Math.random() * available.length)]
+			: null;
+	};
+
+	// Random pages (distinct); fall back to others when fully excluded
+	const tried = new Set<number>();
+	const attempts = Math.min(maxPage, MAX_PAGE_ATTEMPTS);
+	while (tried.size < attempts) {
+		const page = Math.floor(Math.random() * maxPage) + 1;
+		if (tried.has(page)) continue;
+		tried.add(page);
+
+		if (page === 1) {
+			const movie = pick(first.movies);
+			if (movie) return movie;
+			continue;
+		}
+
+		const result = await discoverPage(filters, page);
+		if (!result) return null;
+		const movie = pick(result.movies);
+		if (movie) return movie;
+	}
+
+	// Last resort: the first page (already fetched) if not tried
+	return tried.has(1) ? null : pick(first.movies);
 }
 
 // Fetch full movie detail to get imdb_id
 export async function fetchMovieDetail(
 	tmdbId: number,
+	language: Language,
 ): Promise<TMDBMovieDetail | null> {
-	const res = await fetch(
-		`${TMDB_BASE}/movie/${tmdbId}?api_key=${TMDB_API_KEY}`,
-		{ next: { revalidate: 86400 } },
-	);
+	const params = new URLSearchParams({
+		api_key: TMDB_API_KEY,
+		language: TMDB_LANGUAGE[language],
+	});
+	const res = await fetch(`${TMDB_BASE}/movie/${tmdbId}?${params}`, {
+		next: { revalidate: 86400 },
+	});
 
 	if (!res.ok) return null;
 	return res.json();
 }
 
-// Fetch description from Wikipedia, fallback to TMDB overview
+// Streaming providers available in a country, most relevant first
+export async function fetchWatchProviders(
+	country: string,
+	language: Language,
+): Promise<WatchProvider[]> {
+	const params = new URLSearchParams({
+		api_key: TMDB_API_KEY,
+		watch_region: country,
+		language: TMDB_LANGUAGE[language],
+	});
+
+	try {
+		const res = await fetch(`${TMDB_BASE}/watch/providers/movie?${params}`, {
+			next: { revalidate: 86400 },
+		});
+		if (!res.ok) return [];
+
+		const data = await res.json();
+		const results: {
+			provider_id: number;
+			provider_name: string;
+			logo_path: string | null;
+			display_priority?: number;
+			display_priorities?: Record<string, number>;
+		}[] = data.results ?? [];
+
+		const priority = (p: (typeof results)[number]) =>
+			p.display_priorities?.[country] ?? p.display_priority ?? 999;
+
+		return results
+			.sort((a, b) => priority(a) - priority(b))
+			.map((p) => ({
+				id: p.provider_id,
+				name: p.provider_name,
+				logoPath: p.logo_path,
+			}));
+	} catch (error) {
+		console.error("TMDB watch providers error:", error);
+		return [];
+	}
+}
+
+// Fetch description from Wikipedia (in the profile language), fallback to TMDB overview
 export async function fetchDescription(
 	title: string,
 	tmdbOverview: string,
+	language: Language,
 ): Promise<string> {
 	try {
 		const encoded = encodeURIComponent(title.replace(/ /g, "_"));
 		const res = await fetch(
-			`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`,
+			`https://${language}.wikipedia.org/api/rest_v1/page/summary/${encoded}`,
 			{ next: { revalidate: 86400 } },
 		);
 
@@ -111,21 +225,17 @@ export async function fetchDescription(
 	return tmdbOverview;
 }
 
-// Build Letterboxd slug from title using the slugify package logic
-export function buildLetterboxdUrls(title: string): {
+// Letterboxd resolves /tmdb/{id} to the film page regardless of the title
+// language, so the localized title is not used to build the slug.
+export function buildLetterboxdUrls(
+	tmdbId: number,
+	title: string,
+): {
 	main: string;
 	fallback: string;
 } {
-	const slug = title
-		.toLowerCase()
-		.normalize("NFD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.replace(/[^a-z0-9\s-]/g, "")
-		.trim()
-		.replace(/\s+/g, "-");
-
 	return {
-		main: `https://letterboxd.com/film/${slug}/`,
+		main: `https://letterboxd.com/tmdb/${tmdbId}/`,
 		fallback: `https://letterboxd.com/search/${encodeURIComponent(title)}/`,
 	};
 }

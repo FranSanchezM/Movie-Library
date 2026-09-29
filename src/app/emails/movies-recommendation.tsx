@@ -1,4 +1,5 @@
 import type { EnrichedMovie } from "@/lib/tmdb";
+import type { Language } from "@/types";
 import {
 	Body,
 	Button,
@@ -13,22 +14,52 @@ import {
 	Text,
 } from "@react-email/components";
 
+const COPY = {
+	es: {
+		subject: (title: string) => `🎬 Tu recomendación de la semana: ${title}`,
+		welcome: "🎬 Bienvenido a CineRandom",
+		tagline: "Tu viaje cinematográfico empieza ahora",
+		eyebrow: "TU PELÍCULA DE ESTA SEMANA",
+		poster: (title: string) => `Póster de ${title}`,
+		letterboxd: "Ver en Letterboxd",
+		imdb: "Ver en IMDb",
+		footer:
+			"Cada semana, descubrirás una nueva película recomendada según tus gustos.",
+		receivingFor: "Estás recibiendo este correo por tu perfil:",
+	},
+	en: {
+		subject: (title: string) => `🎬 Your recommendation of the week: ${title}`,
+		welcome: "🎬 Welcome to CineRandom",
+		tagline: "Your cinematic journey starts now",
+		eyebrow: "YOUR MOVIE OF THE WEEK",
+		poster: (title: string) => `Poster of ${title}`,
+		letterboxd: "View on Letterboxd",
+		imdb: "View on IMDb",
+		footer: "Every week, you will discover a new movie picked for your taste.",
+		receivingFor: "You are receiving this email for your profile:",
+	},
+} satisfies Record<Language, unknown>;
+
+export function getEmailSubject(language: Language, title: string): string {
+	return COPY[language].subject(title);
+}
+
 interface MovieRecommendationEmailProps {
-	libraryName: string;
+	profileName: string;
 	movie: EnrichedMovie;
-	frequency: "daily" | "weekly";
+	language: Language;
 }
 
 export function MovieRecommendationEmail({
-	libraryName,
+	profileName,
 	movie,
-	frequency,
+	language,
 }: MovieRecommendationEmailProps) {
-	const freqLabel = frequency === "daily" ? "de hoy" : "de la semana";
-	const subject = `🎬 Tu recomendación ${freqLabel}: ${movie.title}`;
+	const t = COPY[language];
+	const subject = t.subject(movie.title);
 
 	return (
-		<Html lang="es">
+		<Html lang={language}>
 			<Head />
 			<Preview>{subject}</Preview>
 			<Body
@@ -65,7 +96,7 @@ export function MovieRecommendationEmail({
 								fontWeight: "600",
 							}}
 						>
-							🎬 Bienvenido a CineRandom
+							{t.welcome}
 						</Heading>
 						<Text
 							style={{
@@ -75,7 +106,7 @@ export function MovieRecommendationEmail({
 								lineHeight: "1.4",
 							}}
 						>
-							Tu viaje cinematográfico empieza ahora
+							{t.tagline}
 						</Text>
 					</Section>
 
@@ -100,13 +131,13 @@ export function MovieRecommendationEmail({
 								margin: "0 0 20px",
 							}}
 						>
-							TU PELÍCULA {frequency === "daily" ? "DE HOY" : "DE ESTA SEMANA"}
+							{t.eyebrow}
 						</Text>
 
 						{movie.posterUrl && (
 							<Img
 								src={movie.posterUrl}
-								alt={`Póster de ${movie.title}`}
+								alt={t.poster(movie.title)}
 								width="240"
 								style={{
 									width: "240px",
@@ -169,7 +200,7 @@ export function MovieRecommendationEmail({
 								display: "inline-block",
 							}}
 						>
-							Ver en Letterboxd
+							{t.letterboxd}
 						</Button>
 
 						{movie.imdbUrl && (
@@ -182,7 +213,7 @@ export function MovieRecommendationEmail({
 										textDecoration: "underline",
 									}}
 								>
-									Ver en IMDb
+									{t.imdb}
 								</a>
 							</div>
 						)}
@@ -198,11 +229,9 @@ export function MovieRecommendationEmail({
 								lineHeight: "1.5",
 							}}
 						>
-							Cada {frequency === "daily" ? "día" : "semana"}, descubrirás una
-							nueva película recomendada según tus gustos.
+							{t.footer}
 							<br />
-							Estás recibiendo este correo por tu biblioteca:{" "}
-							<strong>{libraryName}</strong>.
+							{t.receivingFor} <strong>{profileName}</strong>.
 						</Text>
 					</Section>
 				</Container>
